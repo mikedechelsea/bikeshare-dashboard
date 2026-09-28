@@ -84,6 +84,11 @@ async function queryOptional(sql, label) {
   }
 }
 
+// Same cleaning the SQL uses to match station names: drop "(...)", keep letters/digits.
+function nameKey(v) {
+  return String(v || "").replace(/\s*\(.*\)/g, "").replace(/[^a-zA-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 function slotOf(r) {
   return String(r.time_window || r.peak_window || r.win || r.slot || r.window || "");
 }
@@ -159,18 +164,68 @@ async function extras() {
     ebike_share: num(r.ebike_share)
   }));
   const promo = (await queryOptional(
-    `SELECT station_id, casual_share, conversion_gap, peak_casual_share, casual_trips, member_trips
+    `SELECT station_id, station_name, casual_share, conversion_gap, peak_casual_share, casual_trips, member_trips
      FROM \`${CONFIG.projectId}.${CONFIG.datasetId}.v_promo_targets\``,
     "v_promo_targets"
   )).map(r => ({
     station_id: String(r.station_id || ""),
+    station_name: String(r.station_name || ""),
     casual_share: num(r.casual_share),
     conversion_gap: num(r.conversion_gap),
     peak_casual_share: num(r.peak_casual_share),
     casual_trips: num(r.casual_trips),
     member_trips: num(r.member_trips)
   }));
-  return { fleet, routes, riders, hours, peakRoutes, promo };
+  const geo = await mapLayers();
+  return { fleet, routes, riders, hours, peakRoutes, promo, geo };
+}
+
+// Map data (sql/08_map_layers.sql): station points with 24 hourly departure counts,
+// the busiest origin -> destination flows, and round-trip totals.
+async function mapLayers() {
+  const ds = `${CONFIG.projectId}.${CONFIG.datasetId}`;
+  const geoRows = await queryOptional(`SELECT * FROM \`${ds}.v_station_geo\``, "v_station_geo");
+  if (!geoRows.length) return null;
+  const hourRows = await queryOptional(`SELECT station_id, hour, trips FROM \`${ds}.v_station_hour\``, "v_station_hour");
+  const flowRows = await queryOptional(
+    `SELECT * FROM \`${ds}.v_top_flows\` ORDER BY trips DESC LIMIT 400`, "v_top_flows");
+  const [round] = await queryOptional(`SELECT * FROM \`${ds}.v_round_trips\``, "v_round_trips");
+
+  const hoursBy = {};
+  hourRows.forEach(r => {
+    const id = String(r.station_id);
+    (hoursBy[id] = hoursBy[id] || new Array(24).fill(0))[num(r.hour)] = num(r.trips);
+  });
+  const stations = geoRows
+    .filter(r => num(r.lat) && num(r.lng))
+    .map(r => ({
+      id: String(r.station_id),
+      name: String(r.station_name || ""),
+      lat: num(r.lat),
+      lng: num(r.lng),
+      dep: num(r.departures),
+      arr: num(r.arrivals),
+      rev: num(r.est_revenue),
+      ebike: num(r.ebike_share),
+      casual: num(r.casual_share),
+      top_route: r.top_route ? String(r.top_route) : "",
+      hours: hoursBy[String(r.station_id)] || new Array(24).fill(0)
+    }));
+  const known = new Set(stations.map(s => s.id));
+  const flows = flowRows
+    .filter(r => known.has(String(r.origin_id)) && known.has(String(r.dest_id)))
+    .map(r => ({
+      o: String(r.origin_id),
+      d: String(r.dest_id),
+      trips: num(r.trips),
+      ebike: num(r.ebike_trips),
+      casual: num(r.casual_trips),
+      rev: num(r.est_revenue),
+      min: num(r.avg_min)
+    }));
+  const round_trips = round ? Object.fromEntries(Object.entries(round).map(([k, v]) => [k, num(v)])) : null;
+  console.log(`map → ${stations.length} stations with coordinates, ${flows.length} flows`);
+  return { stations, flows, round_trips };
 }
 
 async function pushKv(rows, source, extra) {
@@ -198,6 +253,8 @@ async function pushKv(rows, source, extra) {
     riders: (extra && extra.riders) || [],
     hours: (extra && extra.hours) || [],
     peak_routes: (extra && extra.peakRoutes) || [],
+    promo: (extra && extra.promo) || [],
+    geo: (extra && extra.geo) || null,
     data: rows
   };
   const { accountId, namespaceId, apiToken, kvKey } = CONFIG.cloudflare;
@@ -242,18 +299,36 @@ export async function runPipeline() {
     }
 
     const extra = await extras();
-    if (extra.promo && extra.promo.length) {
-      const by = {};
-      extra.promo.forEach(p => { by[p.station_id] = p; });
+    // Trip-data station IDs don't always match the inventory's, so fall back to the cleaned name.
+    const index = list => {
+      const byId = {}, byName = {};
+      list.forEach(x => { byId[x.id] = x; byName[nameKey(x.name)] = x; });
+      return r => byId[r.station_id] || byName[nameKey(r.station_name)];
+    };
+    if (extra.geo) {
+      const find = index(extra.geo.stations);
       rows.forEach(r => {
-        const p = by[r.station_id];
+        const g = find(r);
+        if (!g) return;
+        if (!r.top_route && g.top_route) r.top_route = g.top_route;
+        r.lat = g.lat;
+        r.lng = g.lng;
+      });
+    }
+    if (extra.promo && extra.promo.length) {
+      const find = index(extra.promo.map(p => ({ ...p, id: p.station_id, name: p.station_name })));
+      let matched = 0;
+      rows.forEach(r => {
+        const p = find(r);
         if (!p) return;
+        matched++;
         r.casual_share = p.casual_share;
         r.conversion_gap = p.conversion_gap;
         r.peak_casual_share = p.peak_casual_share;
         r.casual_trips = p.casual_trips;
         r.member_trips = p.member_trips;
       });
+      console.log(`promo → ${extra.promo.length} rows, matched to ${matched} stations`);
     }
     if (extra.fleet.length) {
       extra.fleet.forEach(f => console.log(`fleet ${f.bike_type} → ${f.trips} rides, $${Math.round(f.est_revenue)} est. fare`));
