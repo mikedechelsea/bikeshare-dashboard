@@ -211,6 +211,39 @@
     .mo-tl { right: 12px; min-width: 0; }
     .mo-clock { font-size: 26px; }
   }
+
+  /* ---------- motion: sections reveal once as they scroll into view ---------- */
+  .kpi { position: relative; overflow: hidden; transition: transform .2s ease, box-shadow .2s ease; }
+  .kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+  .kpi .ring { position: absolute; top: 14px; right: 14px; width: 46px; height: 46px; }
+  .kpi .ring circle { fill: none; stroke-width: 6; }
+  .kpi .ring .track { stroke: var(--grid); }
+  .kpi .ring .fill { stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .kpi .spark { display: block; width: 100%; height: 30px; margin-top: 10px; overflow: visible; }
+  .kpi .spark path.line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .kpi .spark path.area { fill: var(--accent); opacity: 0.1; stroke: none; }
+  .kpi .spark circle { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+  .kpi .spark-cap { font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; margin-top: 2px; }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+  @keyframes wipe { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  @keyframes grow-up { from { transform: scaleY(0); } }
+  @keyframes draw { from { stroke-dashoffset: 1; } }
+  @keyframes ring { from { stroke-dashoffset: var(--c); } }
+  @keyframes fade { from { opacity: 0; } }
+  .reveal { animation: rise .6s cubic-bezier(.2,.8,.2,1) backwards; animation-play-state: paused; animation-delay: var(--d, 0ms); }
+  .reveal.in { animation-play-state: running; }
+  .reveal .bar { animation: wipe .9s cubic-bezier(.3,.7,.2,1) backwards paused; animation-delay: calc(var(--d, 0ms) + 250ms + var(--i, 0) * 70ms); }
+  .reveal .col { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-up .7s cubic-bezier(.2,.8,.2,1) backwards paused; animation-delay: calc(200ms + var(--i, 0) * 35ms); }
+  .reveal .spark path.line { stroke-dasharray: 1; animation: draw 1.4s ease-out backwards paused; animation-delay: calc(var(--d, 0ms) + 300ms); }
+  .reveal .spark path.area, .reveal .spark circle { animation: fade .6s ease-out backwards paused; animation-delay: calc(var(--d, 0ms) + 1300ms); }
+  .reveal .ring .fill { animation: ring 1.3s cubic-bezier(.3,.7,.2,1) backwards paused; animation-delay: calc(var(--d, 0ms) + 300ms); }
+  .reveal tbody tr { animation: fade .5s ease-out backwards paused; animation-delay: calc(200ms + var(--i, 0) * 40ms); }
+  .reveal.in .bar, .reveal.in .col, .reveal.in .spark path, .reveal.in .spark circle, .reveal.in .ring .fill, .reveal.in tbody tr { animation-play-state: running; }
+  .reveal.settled, .reveal.settled * { animation: none !important; }
+  @media (prefers-reduced-motion: reduce), print {
+    .reveal, .reveal * { animation: none !important; }
+  }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .headline .big { font-size: 20px; }
@@ -429,14 +462,14 @@
       }).join("");
       const story = groups.find(g => g.key === storyKey);
       const v = story && tot ? pct(n(story[field]) / tot) : "";
-      return '<span class="lbl">' + name + '</span><div class="bar" role="img" aria-label="' + esc(name + " split: " + groups.map(g => label(g.key) + " " + pct(tot ? n(g[field]) / tot : 0)).join(", ")) + '">' + segs +
-        '</div><span class="val num">' + v + (story ? ' <span class="muted">' + esc(label(storyKey).toLowerCase()) + "</span>" : "") + "</span>";
+      return '<span class="lbl">' + name + '</span><div class="bar" style="--i:' + (field === "revenue" ? 1 : 0) + '" role="img" aria-label="' + esc(name + " split: " + groups.map(g => label(g.key) + " " + pct(tot ? n(g[field]) / tot : 0)).join(", ")) + '">' + segs +
+        '</div><span class="val num"><span class="count">' + v + '</span>' + (story ? ' <span class="muted">' + esc(label(storyKey).toLowerCase()) + "</span>" : "") + "</span>";
     };
     return legend(groups.map(g => g.key)) + '<div class="split">' + row("Trips", "trips", totT) + row("Revenue", "revenue", totR) + "</div>";
   }
 
   function facts(items) {
-    return '<div class="facts">' + items.map(f => '<div class="fact"><div class="k">' + (f.key ? '<i class="sw" style="background:' + color(f.key) + '"></i>' : "") + esc(f.k) + '</div><div class="v num">' + esc(f.v) + "</div></div>").join("") + "</div>";
+    return '<div class="facts">' + items.map(f => '<div class="fact"><div class="k">' + (f.key ? '<i class="sw" style="background:' + color(f.key) + '"></i>' : "") + esc(f.k) + '</div><div class="v num count">' + esc(f.v) + "</div></div>").join("") + "</div>";
   }
 
   function niceMax(v) {
@@ -543,6 +576,7 @@
       const cx = L + band * i + band / 2, x = cx - bw / 2;
       let base = y(0);
       const segs = keys.filter(k => d[k] > 0);
+      svg += '<g class="col" style="--i:' + i + '">';
       segs.forEach((k, j) => {
         const h = (H - T - B) * d[k] / max, gap = j ? 2 : 0, top = base - h;
         const hh = Math.max(0, h - gap);
@@ -553,6 +587,7 @@
         }
         base = top;
       });
+      svg += "</g>";
       if (!byHour || d.name % 3 === 0) svg += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(hourName(d.name)) + "</text>";
       const t = tipHTML(byHour ? hourName(d.name) + " – " + hourName((d.name + 1) % 24) : String(d.name),
         keys.map(k => [label(k), int(d[k])]).concat([["Total trips", int(d.total)], ["Est. revenue", usd(d.revenue, 0)]]));
@@ -583,11 +618,11 @@
     }, {})).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
     const keys = ["classic", "ebike"].concat(agg.some(a => a.other) ? ["other"] : []);
     const max = Math.max(...agg.map(a => a.revenue)) || 1;
-    const rows = agg.map(a => {
+    const rows = agg.map((a, i) => {
       const t = tipHTML(a.route, [["Trips", int(a.trips)], ["Est. revenue", usd(a.revenue, 0)], ["Fare / trip", usd(a.trips ? a.revenue / a.trips : 0)]]
         .concat(keys.map(k => [label(k) + " revenue", usd(a[k], 0)])));
       const segs = keys.filter(k => a[k] > 0).map(k => '<div class="seg" style="width:' + (a[k] / a.revenue * 100).toFixed(2) + "%;background:" + color(k) + '"></div>').join("");
-      return '<div class="name" title="' + esc(routeName(a.route)) + '">' + esc(routeName(a.route)) + '</div><div class="track" tabindex="0" data-tip="' + attr(t) + '"><div class="bar" style="width:calc((100% - 64px) * ' + (a.revenue / max).toFixed(4) + ')">' + segs + '</div><span class="v num">' + usdShort(a.revenue) + "</span></div>";
+      return '<div class="name" title="' + esc(routeName(a.route)) + '">' + esc(routeName(a.route)) + '</div><div class="track" tabindex="0" data-tip="' + attr(t) + '"><div class="bar" style="--i:' + i + ';width:calc((100% - 64px) * ' + (a.revenue / max).toFixed(4) + ')">' + segs + '</div><span class="v num count">' + usdShort(a.revenue) + "</span></div>";
     }).join("");
     const top = agg[0];
     const takeaway = "The top corridor, " + routeName(top.route) + ", earned " + usd(top.revenue, 0) + " from " + int(top.trips) + " trips (" +
@@ -700,6 +735,33 @@
     draw();
   }
 
+  // Hour-of-day totals from v_hour_mix (null when the view is by named window instead of clock hour).
+  function hourSeries(hours) {
+    if (new Set(hours.map(h => n(h.hour))).size < 12) return null;
+    const trips = new Array(24).fill(0), rev = new Array(24).fill(0);
+    hours.forEach(h => { const i = n(h.hour); if (i >= 0 && i < 24) { trips[i] += n(h.trips); rev[i] += n(h.est_revenue); } });
+    return { trips, rev, fare: trips.map((t, i) => t ? rev[i] / t : 0) };
+  }
+  const hourShort = h => (h % 12 || 12) + (h < 12 ? "am" : "pm");
+
+  function sparkline(values, what) {
+    const W = 160, H = 30, max = Math.max(...values) || 1, min = Math.min(...values);
+    const x = i => i / (values.length - 1) * W, y = v => H - 2 - (v - min) / (max - min || 1) * (H - 6);
+    const pts = values.map((v, i) => x(i).toFixed(1) + "," + y(v).toFixed(1));
+    const peak = values.indexOf(max);
+    return '<svg class="spark" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<path class="area" d="M0,' + H + " L" + pts.join(" L") + " L" + W + "," + H + ' Z"/>' +
+      '<path class="line" pathLength="1" d="M' + pts.join(" L") + '" vector-effect="non-scaling-stroke"/>' +
+      '<circle cx="' + x(peak).toFixed(1) + '" cy="' + y(max).toFixed(1) + '" r="3.5" vector-effect="non-scaling-stroke"/></svg>' +
+      '<div class="spark-cap"><span>' + esc(what) + " by hour</span><span>peak " + hourShort(peak) + "</span></div>";
+  }
+
+  function ringGauge(share, colorVar) {
+    const r = 20, c = 2 * Math.PI * r, v = Math.max(0, Math.min(1, share));
+    return '<svg class="ring" viewBox="0 0 46 46" aria-hidden="true"><circle class="track" cx="23" cy="23" r="' + r + '"/>' +
+      '<circle class="fill" cx="23" cy="23" r="' + r + '" style="stroke:var(' + colorVar + ');--c:' + c.toFixed(2) + '" stroke-dasharray="' + c.toFixed(2) + '" stroke-dashoffset="' + (c * (1 - v)).toFixed(2) + '"/></svg>';
+  }
+
   function renderKpis(p, stations, fleet, riders) {
     const trips = n(p.summary && p.summary.total_trips_recorded) || sum(stations, s => s.trip_volume);
     const revenue = n(p.summary && p.summary.est_revenue) || sum(stations, s => s.est_revenue);
@@ -708,14 +770,16 @@
     const fTrips = sum(fleet, f => f.trips), fRev = sum(fleet, f => f.est_revenue);
     const cTrips = sum(riders.filter(r => riderKey(r.rider) === "casual"), r => r.trips), rTrips = sum(riders, r => r.trips);
     const withTrips = stations.filter(s => s.trip_volume > 0).length;
+    const hs = hourSeries(p.hours || []);
     const tiles = [
-      revenue > 0 && { label: "Estimated fare revenue", value: usdShort(revenue), ctx: "Trip fares only, see note below" },
-      { label: "Trips", value: int(trips), ctx: "across " + int(withTrips) + " of " + int(stations.length) + " stations" },
-      revenue > 0 && trips > 0 && { label: "Fare per trip", value: usd(revenue / trips), ctx: "average, all bikes & riders" },
-      fTrips > 0 && { label: "E-bike share of trips", value: pct(eTrips / fTrips), ctx: fRev ? pct(eRev / fRev) + " of fare revenue" : "" },
-      rTrips > 0 && { label: "Casual share of trips", value: pct(cTrips / rTrips), ctx: "riders without a membership" }
+      revenue > 0 && { label: "Estimated fare revenue", value: usdShort(revenue), ctx: "Trip fares only, see note below", viz: hs && sparkline(hs.rev, "Revenue") },
+      { label: "Trips", value: int(trips), ctx: "across " + int(withTrips) + " of " + int(stations.length) + " stations", viz: hs && sparkline(hs.trips, "Trips") },
+      revenue > 0 && trips > 0 && { label: "Fare per trip", value: usd(revenue / trips), ctx: "average, all bikes & riders", viz: hs && sparkline(hs.fare, "Fare") },
+      fTrips > 0 && { label: "E-bike share of trips", value: pct(eTrips / fTrips), ctx: fRev ? pct(eRev / fRev) + " of fare revenue" : "", ring: ringGauge(eTrips / fTrips, "--ebike") },
+      rTrips > 0 && { label: "Casual share of trips", value: pct(cTrips / rTrips), ctx: "riders without a membership", ring: ringGauge(cTrips / rTrips, "--casual") }
     ].filter(Boolean);
-    document.getElementById("kpis").innerHTML = tiles.map(t => '<div class="card kpi"><div class="label">' + esc(t.label) + '</div><div class="value">' + esc(t.value) + '</div><div class="ctx">' + esc(t.ctx || "") + "</div></div>").join("");
+    document.getElementById("kpis").innerHTML = tiles.map(t => '<div class="card kpi">' + (t.ring || "") + '<div class="label">' + esc(t.label) +
+      '</div><div class="value count">' + esc(t.value) + '</div><div class="ctx">' + esc(t.ctx || "") + "</div>" + (t.viz || "") + "</div>").join("");
   }
 
   function roundTripInsight(geo) {
@@ -1005,6 +1069,43 @@
     }
   }
 
+  // ---------- motion: reveal sections once, count numbers up ----------
+  function countUp(el, delay) {
+    const text = el.textContent, m = /^(.*?)(\d[\d,]*\.?\d*)(.*)$/s.exec(text);
+    if (!m) return;
+    const target = parseFloat(m[2].replace(/,/g, "")), decimals = (m[2].split(".")[1] || "").length, commas = m[2].includes(",");
+    const fmt = v => m[1] + (commas ? v.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : v.toFixed(decimals)) + m[3];
+    const t0 = performance.now() + delay, dur = 1200;
+    el.textContent = fmt(0);
+    const step = now => {
+      const k = Math.max(0, Math.min(1, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = k >= 1 ? text : fmt(target * e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  function setupReveal() {
+    if (REDUCED_MOTION || !("IntersectionObserver" in window)) return;
+    const targets = [...document.querySelectorAll("#app > section.card, #app > .grid-2 > section.card, #kpis > .kpi")];
+    targets.forEach((el, i) => {
+      el.classList.add("reveal");
+      if (el.classList.contains("kpi")) el.style.setProperty("--d", (i % 5) * 90 + "ms");
+      el.querySelectorAll("tbody tr").forEach((tr, j) => tr.style.setProperty("--i", Math.min(j, 15)));
+    });
+    const io = new IntersectionObserver(entries => entries.forEach(en => {
+      if (!en.isIntersecting) return;
+      const el = en.target;
+      io.unobserve(el);
+      el.classList.add("in");
+      const base = parseInt(getComputedStyle(el).getPropertyValue("--d")) || 0;
+      el.querySelectorAll(".count").forEach((c, j) => countUp(c, base + 250 + j * 60));
+      // Once played, drop the animations so re-sorting a table doesn't replay them.
+      setTimeout(() => el.classList.add("settled"), base + 2600);
+    }), { threshold: 0.15, rootMargin: "0px 0px -8% 0px" });
+    targets.forEach(el => io.observe(el));
+  }
+
   // ---------- load ----------
   async function loadData() {
     const status = document.getElementById("status");
@@ -1037,6 +1138,7 @@
       document.getElementById("app").hidden = false;
       document.getElementById("admin").hidden = !ACTIONS_ENABLED;
       renderMap(p, period).catch(e => console.error("map:", e));
+      setupReveal();
     } catch (err) {
       status.hidden = false;
       status.classList.add("error");
