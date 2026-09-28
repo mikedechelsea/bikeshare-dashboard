@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dock Pulse · Bay Wheels fare revenue</title>
+<meta name="description" content="Where is Bay Wheels bike share leaving fare revenue on the table? Fleet, rider, time-of-day, route and station analysis.">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #6f6d68;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --wash: rgba(11,11,11,0.04);
+    --accent: #2a78d6;
+    /* fleet: classic / e-bike */
+    --classic: #2a78d6;
+    --ebike: #eb6834;
+    /* riders: member / casual */
+    --member: #4a3aa7;
+    --casual: #1baf7a;
+    --seq: #86b6ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --muted: #989690;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255,255,255,0.10);
+      --wash: rgba(255,255,255,0.05);
+      --accent: #3987e5;
+      --classic: #3987e5;
+      --ebike: #d95926;
+      --member: #9085e9;
+      --casual: #199e70;
+      --seq: #1c5cab;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #989690;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.05);
+    --accent: #3987e5; --classic: #3987e5; --ebike: #d95926; --member: #9085e9; --casual: #199e70; --seq: #1c5cab;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 { font-size: 18px; margin: 0 0 4px; }
+  p { margin: 0; }
+  .muted { color: var(--muted); }
+  .sub { color: var(--ink-2); }
+  .small { font-size: 13px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header { margin-bottom: 24px; }
+  .question { font-size: 17px; color: var(--ink-2); max-width: 720px; }
+  .meta { margin-top: 10px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  section.card { margin-top: 16px; }
+  .section-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .takeaway { font-size: 15px; color: var(--ink); margin-top: 4px; max-width: 760px; }
+
+  .headline { padding: 24px; }
+  .headline .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  .headline .big { font-size: 24px; line-height: 1.3; font-weight: 600; margin-top: 6px; max-width: 860px; }
+  .headline ul { margin: 14px 0 0; padding-left: 18px; color: var(--ink-2); }
+  .headline li + li { margin-top: 4px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-top: 16px; }
+  .kpi { padding: 16px; }
+  .kpi .label { font-size: 13px; color: var(--ink-2); }
+  .kpi .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+  .kpi .ctx { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+  .grid-2 > section.card { margin-top: 0; }
+  .row-2 { margin-top: 16px; }
+
+  /* legend */
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink-2); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* split bars (share of trips vs share of revenue) */
+  .split { display: grid; grid-template-columns: 72px 1fr auto; align-items: center; gap: 8px 10px; margin-top: 12px; }
+  .split .lbl { font-size: 13px; color: var(--ink-2); }
+  .split .val { font-size: 13px; text-align: right; white-space: nowrap; }
+  .bar { display: flex; gap: 2px; height: 20px; }
+  .seg { height: 100%; min-width: 2px; }
+  .seg:first-child { border-radius: 4px 0 0 4px; }
+  .seg:last-child { border-radius: 0 4px 4px 0; }
+  .seg:only-child { border-radius: 4px; }
+  .facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }
+  .fact { background: var(--wash); border-radius: 8px; padding: 10px 12px; }
+  .fact .k { font-size: 12px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+  .fact .v { font-size: 20px; font-weight: 600; }
+
+  /* horizontal route bars */
+  .hbars { display: grid; grid-template-columns: minmax(120px, 42%) 1fr; gap: 8px 12px; align-items: center; }
+  .hbars .name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hbars .track { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .hbars .bar { height: 14px; flex: none; }
+  .hbars .v { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+
+  .chart-scroll { overflow-x: auto; }
+  .chart-scroll svg { min-width: 560px; display: block; }
+  svg text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .hit { fill: transparent; cursor: default; }
+  .hit:hover, .hit:focus { fill: var(--wash); outline: none; }
+  [data-tip]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  th { font-weight: 600; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
+  th.r, td.r { text-align: right; font-variant-numeric: tabular-nums; }
+  th button { all: unset; cursor: pointer; }
+  th button:hover, th button:focus-visible { color: var(--ink); text-decoration: underline; }
+  tbody tr:hover { background: var(--wash); }
+  .scroll { overflow-x: auto; margin: 0 -4px; }
+  .minibar { display: inline-block; height: 6px; border-radius: 3px; background: var(--seq); vertical-align: middle; margin-left: 6px; }
+  details { margin-top: 14px; font-size: 13px; }
+  summary { cursor: pointer; color: var(--ink-2); }
+  details table { margin-top: 8px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  input[type=search] {
+    font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; min-width: 200px;
+    border: 1px solid var(--border); background: var(--page); color: var(--ink);
+  }
+  .chip, .btn {
+    font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: transparent; color: var(--ink-2);
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .btn { border-radius: 8px; }
+  .btn:hover, .chip:hover { color: var(--ink); }
+  .tag { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--wash); color: var(--ink-2); margin-left: 6px; white-space: nowrap; }
+
+  .empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
+  .status { padding: 16px 20px; margin-top: 16px; }
+  .status.error { border-color: #d03b3b; }
+  .admin { margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+
+  footer { margin-top: 32px; font-size: 12px; color: var(--muted); display: grid; gap: 6px; }
+  footer a { color: inherit; }
+
+  #tip {
+    position: fixed; z-index: 10; pointer-events: none; display: none; max-width: 280px;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  }
+  #tip b { display: block; margin-bottom: 2px; }
+  #tip .row { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
+  #tip .row span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 24px; }
+    .headline .big { font-size: 20px; }
+    .split { grid-template-columns: 60px 1fr auto; }
+    .facts { grid-template-columns: 1fr; }
+  }
+  @media (forced-colors: active) {
+    .seg, .sw, .minibar { forced-color-adjust: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Dock Pulse</h1>
+    <p class="question">Where is Bay Wheels leaving fare revenue on the table, and what should operations do about it?</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <div id="status" class="card status">Loading the latest data…</div>
+
+  <main id="app" hidden>
+    <section class="card headline" aria-labelledby="headline-text">
+      <div class="eyebrow">Key finding</div>
+      <p class="big" id="headline-text"></p>
+      <ul id="headline-more"></ul>
+    </section>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grid-2 row-2">
+      <section class="card" id="fleet">
+        <div class="section-head"><div>
+          <h2>Fleet: which bikes earn the money?</h2>
+          <p class="takeaway" data-takeaway></p>
+        </div></div>
+        <div data-body></div>
+      </section>
+      <section class="card" id="riders">
+        <div class="section-head"><div>
+          <h2>Riders: who pays, and who could convert?</h2>
+          <p class="takeaway" data-takeaway></p>
+        </div></div>
+        <div data-body></div>
+      </section>
+    </div>
+
+    <section class="card" id="hours">
+      <div class="section-head"><div>
+        <h2>When: trips by time of day</h2>
+        <p class="takeaway" data-takeaway></p>
+      </div></div>
+      <div data-body></div>
+    </section>
+
+    <section class="card" id="routes">
+      <div class="section-head"><div>
+        <h2>Where: the corridors that earn the most</h2>
+        <p class="takeaway" data-takeaway></p>
+      </div></div>
+      <div data-body></div>
+    </section>
+
+    <section class="card" id="peaks">
+      <div class="section-head"><div>
+        <h2>Peak corridors by time window</h2>
+        <p class="takeaway" data-takeaway></p>
+      </div>
+      <div class="controls" data-controls></div></div>
+      <div data-body></div>
+    </section>
+
+    <section class="card" id="promo">
+      <div class="section-head"><div>
+        <h2>Action: where to sell memberships</h2>
+        <p class="takeaway" data-takeaway></p>
+      </div></div>
+      <div data-body></div>
+    </section>
+
+    <section class="card" id="stations">
+      <div class="section-head"><div>
+        <h2>Stations: revenue per dock</h2>
+        <p class="takeaway" data-takeaway></p>
+      </div>
+      <div class="controls"><input type="search" id="station-search" placeholder="Search stations" aria-label="Search stations"></div></div>
+      <div data-body></div>
+    </section>
+
+    <div class="admin card" id="admin" hidden>
+      <strong>Operator mode</strong>
+      <span class="muted">Actions are enabled on this deployment and need the admin token.</span>
+      <button class="btn" id="broadcast">Log broadcast alert</button>
+    </div>
+  </main>
+
+  <footer id="footer">
+    <p id="fare-note"></p>
+    <p>Pipeline: BigQuery views → Node pipeline → Cloudflare KV → Cloudflare Worker.</p>
+  </footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+  const ACTIONS_ENABLED = "__ACTIONS_ENABLED__" === "true";
+
+  // ---------- formatting ----------
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const n = v => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
+  const int = v => Math.round(n(v)).toLocaleString("en-US");
+  const usd = (v, digits) => {
+    const x = n(v);
+    if (digits == null) digits = Math.abs(x) >= 100 ? 0 : 2;
+    return "$" + x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  };
+  const usdShort = v => {
+    const x = n(v);
+    if (Math.abs(x) >= 1e6) return "$" + (x / 1e6).toFixed(2) + "M";
+    if (Math.abs(x) >= 1e4) return "$" + (x / 1e3).toFixed(1) + "K";
+    return usd(x);
+  };
+  const share = v => { const x = n(v); return x > 1 ? x / 100 : x; };  // accept 0–1 or 0–100
+  const pct = (v, d = 0) => (share(v) * 100).toFixed(d) + "%";
+  const sum = (arr, f) => arr.reduce((a, r) => a + n(f(r)), 0);
+
+  const bikeKey = t => /elec|e-?bike|ebike/i.test(t) ? "ebike" : /classic|standard|pedal/i.test(t) ? "classic" : String(t || "other").toLowerCase();
+  const riderKey = t => /member|subscriber/i.test(t) ? "member" : /casual|customer/i.test(t) ? "casual" : String(t || "other").toLowerCase();
+  const LABEL = { ebike: "E-bike", classic: "Classic", member: "Member", casual: "Casual" };
+  const COLOR = { ebike: "var(--ebike)", classic: "var(--classic)", member: "var(--member)", casual: "var(--casual)" };
+  const label = k => LABEL[k] || k.replace(/(^|[_\s])(\w)/g, (m, a, b) => (a ? " " : "") + b.toUpperCase());
+  const color = k => COLOR[k] || "var(--muted)";
+
+  function periodInfo(meta) {
+    let label = meta.period_label, days = n(meta.period_days);
+    const m = /(20\d\d)(0[1-9]|1[0-2])/.exec(meta.period || "");
+    if (m) {
+      const y = +m[1], mo = +m[2];
+      if (!label) label = new Date(Date.UTC(y, mo - 1, 1)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+      if (!days) days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    }
+    return { label: label || "Historic SF Bay Area Bike Share data", days: days || 30 };
+  }
+
+  // ---------- tooltip ----------
+  const tip = document.getElementById("tip");
+  function tipHTML(title, rows) {
+    return "<b>" + esc(title) + "</b>" + rows.map(([k, v]) => '<div class="row"><span>' + esc(k) + "</span><span>" + esc(v) + "</span></div>").join("");
+  }
+  function placeTip(x, y) {
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    let left = x + 14, top = y + 14;
+    if (left + w > innerWidth - 8) left = x - w - 14;
+    if (top + h > innerHeight - 8) top = y - h - 14;
+    tip.style.left = Math.max(8, left) + "px";
+    tip.style.top = Math.max(8, top) + "px";
+  }
+  function showTip(el, x, y) { tip.innerHTML = el.getAttribute("data-tip"); tip.style.display = "block"; placeTip(x, y); }
+  document.addEventListener("mouseover", e => { const el = e.target.closest("[data-tip]"); if (el) showTip(el, e.clientX, e.clientY); else tip.style.display = "none"; });
+  document.addEventListener("mousemove", e => { if (tip.style.display === "block") placeTip(e.clientX, e.clientY); });
+  document.addEventListener("focusin", e => { const el = e.target.closest("[data-tip]"); if (!el) return; const r = el.getBoundingClientRect(); showTip(el, r.right, r.top); });
+  document.addEventListener("focusout", () => { tip.style.display = "none"; });
+  // For attributes holding HTML (tooltips): escape & and " so entities survive into innerHTML.
+  const attr = s => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+
+  // ---------- building blocks ----------
+  function legend(keys) {
+    return '<div class="legend">' + keys.map(k => '<span><i class="sw" style="background:' + color(k) + '"></i>' + esc(label(k)) + "</span>").join("") + "</div>";
+  }
+  function tableView(cols, rows, caption) {
+    return "<details><summary>" + esc(caption || "View as table") + '</summary><div class="scroll"><table><thead><tr>' +
+      cols.map(c => '<th class="' + (c.r ? "r" : "") + '">' + esc(c.h) + "</th>").join("") + "</tr></thead><tbody>" +
+      rows.map(r => "<tr>" + cols.map(c => '<td class="' + (c.r ? "r" : "") + '">' + esc(c.f(r)) + "</td>").join("") + "</tr>").join("") +
+      "</tbody></table></div></details>";
+  }
+  function section(id, takeaway, body) {
+    const el = document.getElementById(id);
+    el.querySelector("[data-takeaway]").textContent = takeaway || "";
+    el.querySelector("[data-body]").innerHTML = body;
+    return el;
+  }
+  function missing(id, what) {
+    section(id, "", '<p class="empty">No ' + esc(what) + " in the latest pipeline run. Run the matching SQL in <code>sql/</code>, then rerun the pipeline.</p>");
+  }
+
+  // Two 100% bars (share of trips vs share of revenue) split by segment, story key labelled at the end.
+  function splitBars(groups, storyKey) {
+    const totT = sum(groups, g => g.trips), totR = sum(groups, g => g.revenue);
+    const row = (name, field, tot) => {
+      const segs = groups.map(g => {
+        const s = tot ? n(g[field]) / tot : 0;
+        const t = tipHTML(label(g.key) + " · " + name, [["Share", pct(s, 1)], [name, field === "revenue" ? usd(g.revenue, 0) : int(g.trips)]]);
+        return '<div class="seg" style="width:' + (s * 100).toFixed(2) + "%;background:" + color(g.key) + '" data-tip="' + attr(t) + '"></div>';
+      }).join("");
+      const story = groups.find(g => g.key === storyKey);
+      const v = story && tot ? pct(n(story[field]) / tot) : "";
+      return '<span class="lbl">' + name + '</span><div class="bar" role="img" aria-label="' + esc(name + " split: " + groups.map(g => label(g.key) + " " + pct(tot ? n(g[field]) / tot : 0)).join(", ")) + '">' + segs +
+        '</div><span class="val num">' + v + (story ? ' <span class="muted">' + esc(label(storyKey).toLowerCase()) + "</span>" : "") + "</span>";
+    };
+    return legend(groups.map(g => g.key)) + '<div class="split">' + row("Trips", "trips", totT) + row("Revenue", "revenue", totR) + "</div>";
+  }
+
+  function facts(items) {
+    return '<div class="facts">' + items.map(f => '<div class="fact"><div class="k">' + (f.key ? '<i class="sw" style="background:' + color(f.key) + '"></i>' : "") + esc(f.k) + '</div><div class="v num">' + esc(f.v) + "</div></div>").join("") + "</div>";
+  }
+
+  function niceMax(v) {
+    if (v <= 0) return 1;
+    const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+    return 10 * p;
+  }
+
+  // ---------- sections ----------
+  function renderFleet(fleet) {
+    if (!fleet.length) return missing("fleet", "fleet (classic vs e-bike) data"), null;
+    const groups = Object.values(fleet.reduce((acc, f) => {
+      const k = bikeKey(f.bike_type);
+      const g = acc[k] || (acc[k] = { key: k, trips: 0, revenue: 0, minutes: 0 });
+      g.trips += n(f.trips); g.revenue += n(f.est_revenue); g.minutes += n(f.avg_min) * n(f.trips);
+      return acc;
+    }, {})).sort((a, b) => (a.key === "classic" ? -1 : b.key === "classic" ? 1 : 0));
+    groups.forEach(g => { g.fare = g.trips ? g.revenue / g.trips : 0; g.avg = g.trips ? g.minutes / g.trips : 0; });
+    const e = groups.find(g => g.key === "ebike"), c = groups.find(g => g.key === "classic");
+    const totT = sum(groups, g => g.trips), totR = sum(groups, g => g.revenue);
+    let takeaway = "", insight = null;
+    if (e && c && totT && totR) {
+      const ts = e.trips / totT, rs = e.revenue / totR, ratio = c.fare ? e.fare / c.fare : 0;
+      takeaway = "E-bikes are " + pct(ts) + " of trips but " + pct(rs) + " of estimated fare revenue" +
+        (ratio > 1.05 ? ", earning " + ratio.toFixed(1) + "× more per trip (" + usd(e.fare) + " vs " + usd(c.fare) + ")." : ".");
+      insight = { text: takeaway, weight: Math.abs(rs - ts) };
+    }
+    section("fleet", takeaway,
+      splitBars(groups, "ebike") +
+      facts(groups.map(g => ({ key: g.key, k: label(g.key) + " fare per trip", v: usd(g.fare) }))) +
+      tableView([
+        { h: "Bike type", f: r => label(r.key) }, { h: "Trips", r: 1, f: r => int(r.trips) },
+        { h: "Est. revenue", r: 1, f: r => usd(r.revenue, 0) }, { h: "Fare / trip", r: 1, f: r => usd(r.fare) },
+        { h: "Avg minutes", r: 1, f: r => n(r.avg).toFixed(1) }
+      ], groups));
+    return insight;
+  }
+
+  function renderRiders(riders) {
+    if (!riders.length) return missing("riders", "member vs casual data"), null;
+    const groups = riders.map(r => ({
+      key: riderKey(r.rider), trips: n(r.trips), revenue: n(r.est_revenue),
+      fare: n(r.fare_per_trip) || (n(r.trips) ? n(r.est_revenue) / n(r.trips) : 0),
+      avg: n(r.avg_min), ebike: n(r.ebike_share), gap: n(r.conversion_gap)
+    })).sort((a, b) => (a.key === "member" ? -1 : b.key === "member" ? 1 : 0));
+    const cas = groups.find(g => g.key === "casual"), mem = groups.find(g => g.key === "member");
+    const totT = sum(groups, g => g.trips), totR = sum(groups, g => g.revenue);
+    let takeaway = "", insight = null;
+    if (cas && mem && totT && totR) {
+      const ts = cas.trips / totT, rs = cas.revenue / totR;
+      takeaway = "Casual riders take " + pct(ts) + " of trips and generate " + pct(rs) + " of trip-fare revenue, paying " +
+        usd(cas.fare) + " per trip vs " + usd(mem.fare) + " for members (membership dues excluded).";
+      insight = { text: takeaway, weight: Math.abs(rs - ts) * 0.9 };
+    }
+    section("riders", takeaway,
+      splitBars(groups, "casual") +
+      facts(groups.map(g => ({ key: g.key, k: label(g.key) + " fare per trip", v: usd(g.fare) }))) +
+      tableView([
+        { h: "Rider", f: r => label(r.key) }, { h: "Trips", r: 1, f: r => int(r.trips) },
+        { h: "Est. revenue", r: 1, f: r => usd(r.revenue, 0) }, { h: "Fare / trip", r: 1, f: r => usd(r.fare) },
+        { h: "Avg minutes", r: 1, f: r => n(r.avg).toFixed(1) }, { h: "E-bike share", r: 1, f: r => pct(r.ebike) },
+        { h: "Conversion gap", r: 1, f: r => n(r.gap).toFixed(2) }
+      ], groups));
+    return insight;
+  }
+
+  function renderHours(hours) {
+    if (!hours.length) return missing("hours", "time-of-day data");
+    // Group by clock hour when the view has hours, else by named window.
+    const byHour = new Set(hours.map(h => n(h.hour))).size > 1;
+    const buckets = new Map();
+    if (byHour) for (let h = 0; h < 24; h++) buckets.set(h, { name: h, member: 0, casual: 0, other: 0, revenue: 0 });
+    hours.forEach(h => {
+      const k = byHour ? n(h.hour) : (h.window || "All day");
+      if (!buckets.has(k)) buckets.set(k, { name: k, member: 0, casual: 0, other: 0, revenue: 0 });
+      const b = buckets.get(k), rk = riderKey(h.rider);
+      b[rk in b ? rk : "other"] += n(h.trips);
+      b.revenue += n(h.est_revenue);
+    });
+    const data = [...buckets.values()];
+    const keys = ["member", "casual"].concat(data.some(d => d.other) ? ["other"] : []);
+    data.forEach(d => d.total = keys.reduce((a, k) => a + d[k], 0));
+    const hourName = h => byHour ? (h % 12 || 12) + (h < 12 ? "am" : "pm") : String(h);
+
+    const W = 720, H = 240, L = 44, R = 8, T = 12, B = 28;
+    const max = niceMax(Math.max(...data.map(d => d.total)));
+    const band = (W - L - R) / data.length, bw = Math.min(24, band * 0.7);
+    const y = v => T + (H - T - B) * (1 - v / max);
+    let svg = "";
+    for (let i = 0; i <= 5; i++) {
+      const v = max * i / 5, yy = y(v);
+      svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="var(' + (i ? "--grid" : "--axis") + ')" stroke-width="1"/>' +
+        '<text x="' + (L - 6) + '" y="' + (yy + 4) + '" text-anchor="end">' + int(v) + "</text>";
+    }
+    data.forEach((d, i) => {
+      const cx = L + band * i + band / 2, x = cx - bw / 2;
+      let base = y(0);
+      const segs = keys.filter(k => d[k] > 0);
+      segs.forEach((k, j) => {
+        const h = (H - T - B) * d[k] / max, gap = j ? 2 : 0, top = base - h;
+        const hh = Math.max(0, h - gap);
+        if (j === segs.length - 1 && hh > 4) {
+          svg += '<path d="M' + x + "," + (base - gap) + "V" + (top + 4) + "q0,-4 4,-4h" + (bw - 8) + "q4,0 4,4V" + (base - gap) + 'Z" fill="' + color(k) + '"/>';
+        } else {
+          svg += '<rect x="' + x + '" y="' + top + '" width="' + bw + '" height="' + hh + '" fill="' + color(k) + '"/>';
+        }
+        base = top;
+      });
+      if (!byHour || d.name % 3 === 0) svg += '<text x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(hourName(d.name)) + "</text>";
+      const t = tipHTML(byHour ? hourName(d.name) + " – " + hourName((d.name + 1) % 24) : String(d.name),
+        keys.map(k => [label(k), int(d[k])]).concat([["Total trips", int(d.total)], ["Est. revenue", usd(d.revenue, 0)]]));
+      svg += '<rect class="hit" tabindex="0" x="' + (L + band * i) + '" y="' + T + '" width="' + band + '" height="' + (H - T - B) + '" data-tip="' + attr(t) + '" aria-label="' + esc(String(d.name) + ": " + int(d.total) + " trips") + '"/>';
+    });
+
+    const peak = data.reduce((a, d) => d.total > a.total ? d : a, data[0]);
+    const casPeak = data.reduce((a, d) => d.casual > a.casual ? d : a, data[0]);
+    const memPeak = data.reduce((a, d) => d.member > a.member ? d : a, data[0]);
+    let takeaway = "Busiest " + (byHour ? "hour" : "window") + ": " + hourName(peak.name) + " (" + int(peak.total) + " trips).";
+    if (casPeak.casual && memPeak.member && casPeak.name !== memPeak.name)
+      takeaway = "Members peak at " + hourName(memPeak.name) + ", casual riders at " + hourName(casPeak.name) +
+        ". Each group needs bikes at different times, so rebalancing and promotions should follow separate schedules.";
+    section("hours", takeaway,
+      legend(keys) + '<div class="chart-scroll" style="margin-top:8px"><svg viewBox="0 0 ' + W + " " + H + '" width="100%" role="img" aria-label="Trips by ' + (byHour ? "hour" : "time window") + ', stacked by rider type">' + svg + "</svg></div>" +
+      tableView([{ h: byHour ? "Hour" : "Window", f: d => hourName(d.name) }].concat(keys.map(k => ({ h: label(k), r: 1, f: d => int(d[k]) })))
+        .concat([{ h: "Est. revenue", r: 1, f: d => usd(d.revenue, 0) }]), data));
+  }
+
+  function renderRoutes(routes) {
+    if (!routes.length) return missing("routes", "route revenue data"), null;
+    const agg = Object.values(routes.reduce((acc, r) => {
+      const a = acc[r.route] || (acc[r.route] = { route: r.route, trips: 0, revenue: 0, classic: 0, ebike: 0, other: 0 });
+      const k = bikeKey(r.bike_type);
+      a.trips += n(r.trips); a.revenue += n(r.est_revenue);
+      a[k in a ? k : "other"] += n(r.est_revenue);
+      return acc;
+    }, {})).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    const keys = ["classic", "ebike"].concat(agg.some(a => a.other) ? ["other"] : []);
+    const max = Math.max(...agg.map(a => a.revenue)) || 1;
+    const rows = agg.map(a => {
+      const t = tipHTML(a.route, [["Trips", int(a.trips)], ["Est. revenue", usd(a.revenue, 0)], ["Fare / trip", usd(a.trips ? a.revenue / a.trips : 0)]]
+        .concat(keys.map(k => [label(k) + " revenue", usd(a[k], 0)])));
+      const segs = keys.filter(k => a[k] > 0).map(k => '<div class="seg" style="width:' + (a[k] / a.revenue * 100).toFixed(2) + "%;background:" + color(k) + '"></div>').join("");
+      return '<div class="name" title="' + esc(a.route) + '">' + esc(a.route) + '</div><div class="track" tabindex="0" data-tip="' + attr(t) + '"><div class="bar" style="width:calc((100% - 64px) * ' + (a.revenue / max).toFixed(4) + ')">' + segs + '</div><span class="v num">' + usdShort(a.revenue) + "</span></div>";
+    }).join("");
+    const top = agg[0];
+    const takeaway = "The top corridor, " + top.route + ", earned " + usd(top.revenue, 0) + " from " + int(top.trips) + " trips (" +
+      usd(top.trips ? top.revenue / top.trips : 0) + " per trip). Keeping these start stations stocked, especially with e-bikes, protects the most fare revenue.";
+    section("routes", takeaway,
+      legend(keys) + '<div class="hbars" style="margin-top:12px">' + rows + "</div>" +
+      tableView([{ h: "Route", f: a => a.route }, { h: "Trips", r: 1, f: a => int(a.trips) }, { h: "Est. revenue", r: 1, f: a => usd(a.revenue, 0) }]
+        .concat(keys.map(k => ({ h: label(k) + " revenue", r: 1, f: a => usd(a[k], 0) }))), agg));
+    return { text: "Top corridor: " + top.route + " (" + usd(top.revenue, 0) + " estimated fare revenue).", weight: 0 };
+  }
+
+  function renderPeaks(peaks) {
+    if (!peaks.length) return missing("peaks", "peak-corridor data");
+    const windows = [...new Set(peaks.map(p => p.window).filter(Boolean))];
+    let active = "All";
+    const controls = document.querySelector("#peaks [data-controls]");
+    const draw = () => {
+      const list = peaks.filter(p => active === "All" || p.window === active).sort((a, b) => n(b.est_revenue) - n(a.est_revenue)).slice(0, 10);
+      const body = '<div class="scroll"><table><thead><tr><th>Window</th><th>Rider</th><th>Route</th><th class="r">Trips</th><th class="r">Est. revenue</th><th class="r">Avg min</th><th class="r">E-bike share</th></tr></thead><tbody>' +
+        list.map(p => "<tr><td>" + esc(p.window) + '</td><td><i class="sw" style="background:' + color(riderKey(p.rider)) + '"></i> ' + esc(label(riderKey(p.rider))) + "</td><td>" + esc(p.route) +
+          '</td><td class="r">' + int(p.trips) + '</td><td class="r">' + usd(p.est_revenue, 0) + '</td><td class="r">' + n(p.avg_min).toFixed(1) + '</td><td class="r">' + pct(p.ebike_share) + "</td></tr>").join("") +
+        "</tbody></table></div>";
+      const top = list[0];
+      section("peaks", top ? "In " + (active === "All" ? "all windows" : active) + ", the highest-earning corridor is " + top.route + " (" + label(riderKey(top.rider)).toLowerCase() + " riders, " + usd(top.est_revenue, 0) + "). Make sure bikes are docked at its start station before this window begins." : "", body);
+      controls.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.w === active)));
+    };
+    controls.innerHTML = ["All"].concat(windows).map(w => '<button class="chip" data-w="' + esc(w) + '">' + esc(w) + "</button>").join("");
+    controls.onclick = e => { const b = e.target.closest(".chip"); if (b) { active = b.dataset.w; draw(); } };
+    draw();
+  }
+
+  function renderPromo(stations) {
+    const list = stations.filter(s => n(s.casual_trips) > 0).sort((a, b) => n(b.casual_trips) - n(a.casual_trips)).slice(0, 10);
+    if (!list.length) return missing("promo", "membership-target (v_promo_targets) data");
+    const totCas = sum(stations, s => s.casual_trips);
+    const topCas = sum(list, s => s.casual_trips);
+    const takeaway = "These " + list.length + " stations carry " + pct(totCas ? topCas / totCas : 0) +
+      " of all casual trips. They are the cheapest place to reach riders who already use the service but don't yet pay a membership.";
+    section("promo", takeaway,
+      '<div class="scroll"><table><thead><tr><th>#</th><th>Station</th><th class="r">Casual trips</th><th class="r">Casual share</th><th class="r">Peak-hour casual share</th><th class="r">Conversion gap</th></tr></thead><tbody>' +
+      list.map((s, i) => '<tr><td class="muted">' + (i + 1) + "</td><td>" + esc(s.station_name) + '</td><td class="r">' + int(s.casual_trips) + '</td><td class="r">' + pct(s.casual_share) +
+        '</td><td class="r">' + pct(s.peak_casual_share) + '</td><td class="r">' + n(s.conversion_gap).toFixed(2) + "</td></tr>").join("") +
+      '</tbody></table></div><p class="small muted" style="margin-top:8px">Conversion gap comes directly from <code>v_promo_targets</code>.</p>');
+  }
+
+  let stationState = { sort: "revenue_per_dock", dir: -1, q: "", all: false };
+  function renderStations(stations, days) {
+    const rows = stations.map(s => ({
+      ...s,
+      per_dock_day: s.capacity > 0 ? n(s.trip_volume) / s.capacity / days : 0,
+      revenue_per_dock: n(s.revenue_per_dock) || (s.capacity > 0 ? n(s.est_revenue) / s.capacity : 0)
+    }));
+    const maxUse = Math.max(...rows.map(r => r.per_dock_day)) || 1;
+    const hasRev = rows.some(r => r.est_revenue > 0);
+    if (!hasRev && stationState.sort === "revenue_per_dock") stationState.sort = "per_dock_day";
+    const cols = [
+      { k: "station_name", h: "Station" },
+      { k: "capacity", h: "Docks", r: 1, f: s => int(s.capacity) + (s.is_overridden ? '<span class="tag" title="Capacity set manually">edited</span>' : "") },
+      { k: "trip_volume", h: "Trips", r: 1, f: s => int(s.trip_volume) },
+      { k: "per_dock_day", h: "Trips / dock / day", r: 1, f: s => s.per_dock_day.toFixed(2) + '<i class="minibar" style="width:' + Math.round(40 * s.per_dock_day / maxUse) + 'px"></i>' },
+      hasRev && { k: "est_revenue", h: "Est. revenue", r: 1, f: s => usd(s.est_revenue, 0) },
+      hasRev && { k: "revenue_per_dock", h: "Revenue / dock", r: 1, f: s => usd(s.revenue_per_dock, 0) },
+      { k: "ebike_share", h: "E-bike share", r: 1, f: s => pct(s.ebike_share) },
+      rows.some(r => r.casual_share != null) && { k: "casual_share", h: "Casual share", r: 1, f: s => s.casual_share == null ? "–" : pct(s.casual_share) },
+      { k: "top_route", h: "Top route", f: s => esc(s.top_route || "–") },
+      ACTIONS_ENABLED && { k: null, h: "", f: s => '<button class="btn" data-override="' + esc(s.station_id) + '" data-cap="' + s.capacity + '">Edit docks</button>' }
+    ].filter(Boolean);
+
+    const withTrips = rows.filter(r => r.trip_volume > 0);
+    const sorted = [...withTrips].sort((a, b) => b.per_dock_day - a.per_dock_day);
+    const q = Math.floor(sorted.length / 4);
+    const idle = rows.length - withTrips.length;
+    let takeaway = "";
+    if (q > 0) {
+      const top = sorted.slice(0, q), bottom = sorted.slice(-q);
+      const avg = arr => sum(arr, r => r.per_dock_day) / arr.length;
+      takeaway = "The busiest quarter of stations turns each dock over " + avg(top).toFixed(1) + "× a day; the quietest quarter only " + avg(bottom).toFixed(2) +
+        "×. Those quiet docks are candidates to move to busier stations" + (idle ? ", along with " + idle + " station" + (idle === 1 ? "" : "s") + " with no rides at all." : ".");
+    }
+
+    const draw = () => {
+      const needle = stationState.q.toLowerCase();
+      const k = stationState.sort;
+      const list = rows.filter(r => !needle || r.station_name.toLowerCase().includes(needle) || String(r.station_id).includes(needle))
+        .sort((a, b) => {
+          const va = a[k], vb = b[k];
+          return (typeof va === "string" ? String(va).localeCompare(String(vb)) : n(va) - n(vb)) * stationState.dir;
+        });
+      const shown = stationState.all ? list : list.slice(0, 15);
+      const head = cols.map(c => '<th class="' + (c.r ? "r" : "") + '"' + (c.k === k ? ' aria-sort="' + (stationState.dir < 0 ? "descending" : "ascending") + '"' : "") + ">" +
+        (c.k ? '<button data-sort="' + c.k + '">' + esc(c.h) + (c.k === k ? (stationState.dir < 0 ? " ↓" : " ↑") : "") + "</button>" : "") + "</th>").join("");
+      const body = shown.map(s => "<tr>" + cols.map(c => '<td class="' + (c.r ? "r" : "") + '">' + (c.f ? c.f(s) : esc(s[c.k])) + "</td>").join("") + "</tr>").join("");
+      const more = list.length > 15
+        ? '<p style="margin-top:10px"><button class="btn" data-more>' + (stationState.all ? "Show top 15" : "Show all " + list.length + " stations") + "</button></p>" : "";
+      section("stations", takeaway, '<div class="scroll"><table><thead><tr>' + head + "</tr></thead><tbody>" +
+        (body || '<tr><td colspan="' + cols.length + '" class="empty">No stations match.</td></tr>') + "</tbody></table></div>" + more);
+    };
+    const el = document.getElementById("stations");
+    el.onclick = e => {
+      const s = e.target.closest("[data-sort]");
+      if (s) { const k = s.dataset.sort; stationState.dir = stationState.sort === k ? -stationState.dir : (k === "station_name" || k === "top_route" ? 1 : -1); stationState.sort = k; draw(); }
+      if (e.target.closest("[data-more]")) { stationState.all = !stationState.all; draw(); }
+      const o = e.target.closest("[data-override]");
+      if (o) overrideCapacity(o.dataset.override, o.dataset.cap);
+    };
+    document.getElementById("station-search").oninput = e => { stationState.q = e.target.value; draw(); };
+    draw();
+  }
+
+  function renderKpis(p, stations, fleet, riders) {
+    const trips = n(p.summary && p.summary.total_trips_recorded) || sum(stations, s => s.trip_volume);
+    const revenue = n(p.summary && p.summary.est_revenue) || sum(stations, s => s.est_revenue);
+    const eTrips = sum(fleet.filter(f => bikeKey(f.bike_type) === "ebike"), f => f.trips);
+    const eRev = sum(fleet.filter(f => bikeKey(f.bike_type) === "ebike"), f => f.est_revenue);
+    const fTrips = sum(fleet, f => f.trips), fRev = sum(fleet, f => f.est_revenue);
+    const cTrips = sum(riders.filter(r => riderKey(r.rider) === "casual"), r => r.trips), rTrips = sum(riders, r => r.trips);
+    const withTrips = stations.filter(s => s.trip_volume > 0).length;
+    const tiles = [
+      revenue > 0 && { label: "Estimated fare revenue", value: usdShort(revenue), ctx: "Trip fares only, see note below" },
+      { label: "Trips", value: int(trips), ctx: "across " + int(withTrips) + " of " + int(stations.length) + " stations" },
+      revenue > 0 && trips > 0 && { label: "Fare per trip", value: usd(revenue / trips), ctx: "average, all bikes & riders" },
+      fTrips > 0 && { label: "E-bike share of trips", value: pct(eTrips / fTrips), ctx: fRev ? pct(eRev / fRev) + " of fare revenue" : "" },
+      rTrips > 0 && { label: "Casual share of trips", value: pct(cTrips / rTrips), ctx: "riders without a membership" }
+    ].filter(Boolean);
+    document.getElementById("kpis").innerHTML = tiles.map(t => '<div class="card kpi"><div class="label">' + esc(t.label) + '</div><div class="value">' + esc(t.value) + '</div><div class="ctx">' + esc(t.ctx || "") + "</div></div>").join("");
+  }
+
+  function renderHeadline(insights, stations) {
+    const list = insights.filter(Boolean);
+    // Always-available fallback: how concentrated demand is across stations.
+    const withTrips = stations.filter(s => s.trip_volume > 0).sort((a, b) => b.trip_volume - a.trip_volume);
+    if (withTrips.length >= 10) {
+      const top = withTrips.slice(0, Math.ceil(withTrips.length / 10));
+      const s = sum(top, r => r.trip_volume) / sum(withTrips, r => r.trip_volume);
+      list.push({ text: "The busiest 10% of stations (" + top.length + ") handle " + pct(s) + " of all trips.", weight: -1 });
+    }
+    if (!list.length) return;
+    const [lead, ...rest] = list.sort((a, b) => b.weight - a.weight);
+    document.getElementById("headline-text").textContent = lead.text;
+    document.getElementById("headline-more").innerHTML = rest.slice(0, 3).map(i => "<li>" + esc(i.text) + "</li>").join("");
+  }
+
+  // ---------- load ----------
+  async function loadData() {
+    const status = document.getElementById("status");
+    try {
+      const res = await fetch("/api/inventory", { cache: "no-store" });
+      if (!res.ok) throw new Error("API returned " + res.status);
+      const p = await res.json();
+      const stations = (p && p.data) || [];
+      if (!stations.length) throw new Error("No station data has been published yet. Run the pipeline to populate Cloudflare KV.");
+      const meta = p.meta || {};
+      const period = periodInfo(meta);
+      const updated = meta.last_updated ? new Date(meta.last_updated) : null;
+      document.getElementById("meta").innerHTML =
+        "<span>Period: <b>" + esc(period.label) + "</b></span>" +
+        (updated ? "<span>Updated " + esc(updated.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })) + "</span>" : "") +
+        "<span>" + int(stations.length) + " stations</span>";
+      document.getElementById("fare-note").textContent = meta.fare_note ||
+        "Revenue figures are estimates of trip fares, not settled revenue.";
+
+      const fleet = p.fleet || [], riders = p.riders || [];
+      renderKpis(p, stations, fleet, riders);
+      const insights = [renderFleet(fleet), renderRiders(riders), renderRoutes(p.routes || [])];
+      renderHours(p.hours || []);
+      renderPeaks(p.peak_routes || []);
+      renderPromo(stations);
+      renderStations(stations, period.days);
+      renderHeadline(insights, stations);
+
+      status.hidden = true;
+      document.getElementById("app").hidden = false;
+      document.getElementById("admin").hidden = !ACTIONS_ENABLED;
+    } catch (err) {
+      status.hidden = false;
+      status.classList.add("error");
+      status.innerHTML = "<strong>Couldn't load the dashboard.</strong> " + esc(err.message) + ' <button class="btn" onclick="location.reload()">Retry</button>';
+    }
+  }
+
+  // ---------- operator actions (only when enabled on the server) ----------
+  function adminToken() {
+    let t = null;
+    try { t = sessionStorage.getItem("dp_admin_token"); } catch (e) {}
+    if (!t) {
+      t = prompt("Admin token:");
+      try { if (t) sessionStorage.setItem("dp_admin_token", t); } catch (e) {}
+    }
+    return t;
+  }
+  async function sendAction(body) {
+    const token = adminToken();
+    if (!token) return false;
+    const res = await fetch("/api/action", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
+    if (res.status === 401) { try { sessionStorage.removeItem("dp_admin_token"); } catch (e) {} }
+    if (!res.ok) { const j = await res.json().catch(() => ({})); alert("Action failed: " + (j.error || res.status)); return false; }
+    return true;
+  }
+  async function overrideCapacity(stationId, currentCap) {
+    const val = prompt("New dock count for station " + stationId + " (1–200):", currentCap);
+    if (val == null) return;
+    const cap = Number(val);
+    if (!Number.isInteger(cap) || cap < 1 || cap > 200) return alert("Enter a whole number between 1 and 200.");
+    if (await sendAction({ action_type: "STATUS_OVERRIDE", station_id: String(stationId), details: { new_capacity: cap } })) loadData();
+  }
+  if (ACTIONS_ENABLED) {
+    document.getElementById("broadcast").onclick = async () => {
+      if (!confirm("Log a broadcast alert?")) return;
+      if (await sendAction({ action_type: "ALERT_SENT", details: { message: "Manual broadcast alert triggered from dashboard" } })) alert("Alert logged.");
+    };
+  }
+
+  loadData();
+</script>
+</body>
+</html>

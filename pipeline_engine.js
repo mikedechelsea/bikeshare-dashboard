@@ -13,7 +13,10 @@ const CONFIG = {
     namespaceId: process.env.CF_KV_NAMESPACE_ID,
     apiToken: process.env.CF_API_TOKEN,
     kvKey: "inventory_dashboard_data"
-  }
+  },
+  // Label and length of the period the BigQuery views cover (used for per-day rates on the dashboard).
+  periodLabel: process.env.PERIOD_LABEL || "",
+  periodDays: Number(process.env.PERIOD_DAYS) || 0
 };
 
 const bigquery = new BigQuery({
@@ -177,6 +180,8 @@ async function pushKv(rows, source, extra) {
       project_id: CONFIG.projectId,
       source,
       period: extra && extra.fleet && extra.fleet.length ? "baywheels_202608_tariff" : "historic_public_sf_bikeshare",
+      period_label: CONFIG.periodLabel || (extra && extra.fleet && extra.fleet.length ? "August 2026" : "Historic SF Bay Area Bike Share data"),
+      period_days: CONFIG.periodDays || (extra && extra.fleet && extra.fleet.length ? 31 : 30),
       fare_note: "Estimated trip fare from published Jan 2026 Bay Wheels tariff. Not Lyft settlement. Excludes membership dues, tax, parking fees."
     },
     summary: {
