@@ -19,6 +19,7 @@ _Fill these in from your live dashboard. The headline card at the top of the pag
 
 | Section | Business question | Data |
 |---|---|---|
+| 3D map | Where and when do rides happen, and where do the leisure loops earn? | `v_station_geo`, `v_station_hour`, `v_top_flows`, `v_round_trips` |
 | Key finding + KPIs | What's the one thing to know? | all views |
 | Fleet | Do e-bikes earn more than their share of trips? | `v_fleet_revenue` |
 | Riders | How much do casual riders pay vs members? | `v_rider_revenue` |
@@ -36,7 +37,7 @@ BigQuery views  ──►  pipeline_engine.js (Node)  ──►  Cloudflare KV  
 
 - **`pipeline_engine.js`** queries the BigQuery views, normalises the rows and writes one JSON payload to Cloudflare KV. It won't publish if a run returns zero rides.
 - **`worker.js`** serves the payload at `GET /api/inventory` and the dashboard page at `/`. The page is plain HTML, CSS and SVG, with no framework and no chart library.
-- **`dashboard.html`** builds every chart and insight sentence in the browser from that payload.
+- **`dashboard.html`** builds every chart and insight sentence in the browser from that payload. The 3D map uses [MapLibre GL](https://maplibre.org/) (loaded from jsDelivr) on the free [CARTO Dark Matter](https://carto.com/basemaps) basemap (© OpenStreetMap contributors, © CARTO), so it needs no API key.
 
 ## Revenue methodology
 
@@ -87,6 +88,7 @@ Run these in order in the BigQuery console (project `beaming-might-319312`, data
 | 5 | `04_rideable_and_revenue.sql` | Prices every trip (`trip_fares`) and creates `v_fleet_revenue`, `v_route_revenue` and the revenue-aware `v_inventory_usage` |
 | 6 | `05_rider_and_peaks.sql` | Adds time windows and member-rate re-pricing, then creates `v_rider_revenue`, `v_hour_mix`, `v_peak_routes` and `v_promo_targets` |
 | 7 | `07_check_fare_desk.sql` | Sanity check that the rider, hour and peak views are populated |
+| 8 | `08_map_layers.sql` | Map layers: station coordinates (median of trip GPS points), departures per station per hour, origin→destination flows and round-trip totals |
 
 Then run the pipeline. Time windows are weekday 7–10am, 10am–4pm and 4–7pm, weekday off-peak, and weekend.
 
@@ -100,4 +102,10 @@ The pipeline reads these columns:
 | `v_rider_revenue` | `rider, trips, est_revenue, fare_per_trip, avg_min, ebike_share, conversion_gap` |
 | `v_hour_mix` | `hour, window, rider, trips, est_revenue` |
 | `v_peak_routes` | `window, rider, route, trips, est_revenue, avg_min, ebike_share` |
-| `v_promo_targets` | `station_id, casual_share, conversion_gap, peak_casual_share, casual_trips, member_trips` |
+| `v_promo_targets` | `station_id, station_name, casual_share, conversion_gap, peak_casual_share, casual_trips, member_trips` |
+| `v_station_geo` | `station_id, station_name, lat, lng, departures, arrivals, est_revenue, ebike_share, casual_share, top_route` |
+| `v_station_hour` | `station_id, hour, trips` |
+| `v_top_flows` | `origin_id, dest_id, trips, ebike_trips, casual_trips, est_revenue, avg_min` (the busiest 400 are published) |
+| `v_round_trips` | `trips, round_trips, casual_revenue, round_trip_casual_revenue` |
+
+Station IDs in the trip data don't always match the station inventory, so the pipeline matches by ID first and then by cleaned station name (the same cleaning the SQL uses).

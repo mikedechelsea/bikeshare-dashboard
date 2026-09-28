@@ -171,6 +171,46 @@
   #tip .row { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
   #tip .row span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+
+  /* ---------- hero map (always dark: bikes glow on a night basemap) ---------- */
+  .map-hero { margin-top: 0; margin-bottom: 16px; border-radius: 14px; overflow: hidden; background: #0d0d0d; color: #fff; border: 1px solid rgba(255,255,255,0.08); }
+  .map-stage { position: relative; height: clamp(420px, 68vh, 640px); }
+  #map-canvas { position: absolute; inset: 0; }
+  .mo { position: absolute; z-index: 2; background: rgba(13,13,13,0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+        border: 1px solid rgba(255,255,255,0.10); border-radius: 10px; padding: 12px 14px; font-size: 12px; color: #c3c2b7; }
+  .mo-tl { top: 12px; left: 12px; min-width: 220px; }
+  .mo-tr { top: 12px; right: 12px; display: flex; flex-direction: column; gap: 6px; padding: 8px; }
+  .mo-bl { bottom: 12px; left: 12px; display: grid; gap: 4px; }
+  .mo-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #989690; font-weight: 600; }
+  .mo-clock { font-size: 34px; font-weight: 700; color: #fff; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .mo-sub { color: #c3c2b7; margin-top: 2px; }
+  .mo-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .mo button { font: inherit; font-size: 12px; color: #fff; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+               border-radius: 8px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+  .mo button:hover, .mo button[aria-pressed="true"] { background: rgba(255,255,255,0.2); }
+  .mo input[type=range] { flex: 1; accent-color: #d95926; min-width: 110px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+  .map-caption { padding: 14px 18px; font-size: 14px; color: #e1e0d9; border-top: 1px solid rgba(255,255,255,0.08); display: grid; gap: 4px; }
+  .map-caption b { color: #fff; }
+  .map-note { padding: 40px 20px; text-align: center; color: #989690; }
+  .map-hero .maplibregl-ctrl-group { background: #1a1a19; border: 1px solid rgba(255,255,255,0.14); }
+  .map-hero .maplibregl-ctrl-group button + button { border-top-color: rgba(255,255,255,0.14); }
+  .map-hero .maplibregl-ctrl-icon { filter: invert(1); }
+  .maplibregl-popup-content { background: #1a1a19 !important; color: #e1e0d9; border-radius: 10px !important; padding: 12px 14px !important; font: 12px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,0.5) !important; }
+  .maplibregl-popup-tip { border-top-color: #1a1a19 !important; border-bottom-color: #1a1a19 !important; }
+  .maplibregl-popup-close-button { color: #c3c2b7; font-size: 16px; }
+  .pop h3 { margin: 0 0 6px; font-size: 14px; color: #fff; padding-right: 14px; }
+  .pop .g { display: grid; grid-template-columns: auto auto; gap: 2px 14px; }
+  .pop .g span:nth-child(even) { color: #fff; text-align: right; font-variant-numeric: tabular-nums; }
+  .pop .acts { display: flex; gap: 8px; margin-top: 10px; }
+  .pop a, .pop button { font: inherit; color: #fff; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 4px 8px; text-decoration: none; cursor: pointer; }
+  @media (max-width: 640px) {
+    .mo-tr { top: auto; bottom: 12px; right: 12px; left: 12px; flex-direction: row; overflow-x: auto; }
+    .map-hero .maplibregl-ctrl-bottom-right { display: none; }
+    .mo-bl { display: none; }
+    .mo-tl { right: 12px; min-width: 0; }
+    .mo-clock { font-size: 26px; }
+  }
   @media (max-width: 560px) {
     h1 { font-size: 24px; }
     .headline .big { font-size: 20px; }
@@ -193,6 +233,24 @@
   <div id="status" class="card status">Loading the latest data…</div>
 
   <main id="app" hidden>
+    <section class="map-hero" id="map" hidden aria-labelledby="map-title">
+      <div class="map-stage">
+        <div id="map-canvas" role="img" aria-label="Animated 3D map: bikes moving along the busiest Bay Wheels routes, hour by hour"></div>
+        <div class="mo mo-tl">
+          <div class="mo-eyebrow" id="map-title">A day of Bay Wheels</div>
+          <div class="mo-clock" id="map-clock" aria-live="off">–</div>
+          <div class="mo-sub" id="map-hour-trips"></div>
+          <div class="mo-row">
+            <button id="map-play" aria-label="Pause the day">❚❚ Pause</button>
+            <input type="range" id="map-hour" min="0" max="23" step="1" aria-label="Hour of day">
+          </div>
+        </div>
+        <div class="mo mo-tr" id="map-views"></div>
+        <div class="mo mo-bl" id="map-legend"></div>
+      </div>
+      <div class="map-caption" id="map-caption"></div>
+    </section>
+
     <section class="card headline" aria-labelledby="headline-text">
       <div class="eyebrow">Key finding</div>
       <p class="big" id="headline-text"></p>
@@ -303,6 +361,8 @@
   const WINDOWS = { am_peak: "Weekday 7–10am", midday: "Weekday 10am–4pm", pm_peak: "Weekday 4–7pm", off_peak: "Weekday off-peak", weekend: "Weekend" };
   const windowLabel = w => WINDOWS[w] || String(w || "");
   const windowOrder = w => { const i = Object.keys(WINDOWS).indexOf(w); return i < 0 ? 99 : i; };
+  // "A → A" is a round trip; say so instead of repeating the name.
+  const routeName = r => { const [a, b] = String(r || "").split(" → "); return b != null && a === b ? a + " (round trip)" : String(r || ""); };
   const label = k => LABEL[k] || k.replace(/(^|[_\s])(\w)/g, (m, a, b) => (a ? " " : "") + b.toUpperCase());
   const color = k => COLOR[k] || "var(--muted)";
 
@@ -382,7 +442,7 @@
   function niceMax(v) {
     if (v <= 0) return 1;
     const p = Math.pow(10, Math.floor(Math.log10(v)));
-    for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+    for (const m of [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
     return 10 * p;
   }
 
@@ -527,16 +587,16 @@
       const t = tipHTML(a.route, [["Trips", int(a.trips)], ["Est. revenue", usd(a.revenue, 0)], ["Fare / trip", usd(a.trips ? a.revenue / a.trips : 0)]]
         .concat(keys.map(k => [label(k) + " revenue", usd(a[k], 0)])));
       const segs = keys.filter(k => a[k] > 0).map(k => '<div class="seg" style="width:' + (a[k] / a.revenue * 100).toFixed(2) + "%;background:" + color(k) + '"></div>').join("");
-      return '<div class="name" title="' + esc(a.route) + '">' + esc(a.route) + '</div><div class="track" tabindex="0" data-tip="' + attr(t) + '"><div class="bar" style="width:calc((100% - 64px) * ' + (a.revenue / max).toFixed(4) + ')">' + segs + '</div><span class="v num">' + usdShort(a.revenue) + "</span></div>";
+      return '<div class="name" title="' + esc(routeName(a.route)) + '">' + esc(routeName(a.route)) + '</div><div class="track" tabindex="0" data-tip="' + attr(t) + '"><div class="bar" style="width:calc((100% - 64px) * ' + (a.revenue / max).toFixed(4) + ')">' + segs + '</div><span class="v num">' + usdShort(a.revenue) + "</span></div>";
     }).join("");
     const top = agg[0];
-    const takeaway = "The top corridor, " + top.route + ", earned " + usd(top.revenue, 0) + " from " + int(top.trips) + " trips (" +
+    const takeaway = "The top corridor, " + routeName(top.route) + ", earned " + usd(top.revenue, 0) + " from " + int(top.trips) + " trips (" +
       usd(top.trips ? top.revenue / top.trips : 0) + " per trip). Keeping these start stations stocked, especially with e-bikes, protects the most fare revenue.";
     section("routes", takeaway,
       legend(keys) + '<div class="hbars" style="margin-top:12px">' + rows + "</div>" +
       tableView([{ h: "Route", f: a => a.route }, { h: "Trips", r: 1, f: a => int(a.trips) }, { h: "Est. revenue", r: 1, f: a => usd(a.revenue, 0) }]
         .concat(keys.map(k => ({ h: label(k) + " revenue", r: 1, f: a => usd(a[k], 0) }))), agg));
-    return { text: "Top corridor: " + top.route + " (" + usd(top.revenue, 0) + " estimated fare revenue).", weight: 0 };
+    return { text: "Top corridor: " + routeName(top.route) + " (" + usd(top.revenue, 0) + " estimated fare revenue).", weight: 0 };
   }
 
   function renderPeaks(peaks) {
@@ -547,11 +607,11 @@
     const draw = () => {
       const list = peaks.filter(p => active === "All" || p.window === active).sort((a, b) => n(b.est_revenue) - n(a.est_revenue)).slice(0, 10);
       const body = '<div class="scroll"><table><thead><tr><th>Window</th><th>Rider</th><th>Route</th><th class="r">Trips</th><th class="r">Est. revenue</th><th class="r">Avg min</th><th class="r">E-bike share</th></tr></thead><tbody>' +
-        list.map(p => "<tr><td>" + esc(windowLabel(p.window)) + '</td><td><i class="sw" style="background:' + color(riderKey(p.rider)) + '"></i> ' + esc(label(riderKey(p.rider))) + "</td><td>" + esc(p.route) +
+        list.map(p => "<tr><td>" + esc(windowLabel(p.window)) + '</td><td><i class="sw" style="background:' + color(riderKey(p.rider)) + '"></i> ' + esc(label(riderKey(p.rider))) + "</td><td>" + esc(routeName(p.route)) +
           '</td><td class="r">' + int(p.trips) + '</td><td class="r">' + usd(p.est_revenue, 0) + '</td><td class="r">' + n(p.avg_min).toFixed(1) + '</td><td class="r">' + pct(p.ebike_share) + "</td></tr>").join("") +
         "</tbody></table></div>";
       const top = list[0];
-      section("peaks", top ? "In " + (active === "All" ? "all windows" : windowLabel(active)) + ", the highest-earning corridor is " + top.route + " (" + label(riderKey(top.rider)).toLowerCase() + " riders, " + usd(top.est_revenue, 0) + "). Make sure bikes are docked at its start station before this window begins." : "", body);
+      section("peaks", top ? "In " + (active === "All" ? "all windows" : windowLabel(active)) + ", the highest-earning corridor is " + routeName(top.route) + " (" + label(riderKey(top.rider)).toLowerCase() + " riders, " + usd(top.est_revenue, 0) + "). Make sure bikes are docked at its start station before this window begins." : "", body);
       controls.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.w === active)));
     };
     controls.innerHTML = ["All"].concat(windows).map(w => '<button class="chip" data-w="' + esc(w) + '">' + esc(w === "All" ? w : windowLabel(w)) + "</button>").join("");
@@ -595,7 +655,7 @@
       hasRev && { k: "revenue_per_dock", h: "Revenue / dock", r: 1, f: s => usd(s.revenue_per_dock, 0) },
       { k: "ebike_share", h: "E-bike share", r: 1, f: s => pct(s.ebike_share) },
       rows.some(r => r.casual_share != null) && { k: "casual_share", h: "Casual share", r: 1, f: s => s.casual_share == null ? "–" : pct(s.casual_share) },
-      { k: "top_route", h: "Top route", f: s => esc(s.top_route || "–") },
+      { k: "top_route", h: "Top route", f: s => esc(routeName(s.top_route) || "–") },
       ACTIONS_ENABLED && { k: null, h: "", f: s => '<button class="btn" data-override="' + esc(s.station_id) + '" data-cap="' + s.capacity + '">Edit docks</button>' }
     ].filter(Boolean);
 
@@ -658,6 +718,13 @@
     document.getElementById("kpis").innerHTML = tiles.map(t => '<div class="card kpi"><div class="label">' + esc(t.label) + '</div><div class="value">' + esc(t.value) + '</div><div class="ctx">' + esc(t.ctx || "") + "</div></div>").join("");
   }
 
+  function roundTripInsight(geo) {
+    const rt = geo && geo.round_trips;
+    if (!rt || !rt.trips || !rt.casual_revenue) return null;
+    return { text: "Round trips (rides that end where they started) are " + pct(rt.round_trips / rt.trips) + " of rides but " +
+      pct(rt.round_trip_casual_revenue / rt.casual_revenue) + " of casual fare revenue.", weight: 0.03 };
+  }
+
   function renderHeadline(insights, stations) {
     const list = insights.filter(Boolean);
     // Always-available fallback: how concentrated demand is across stations.
@@ -671,6 +738,271 @@
     const [lead, ...rest] = list.sort((a, b) => b.weight - a.weight);
     document.getElementById("headline-text").textContent = lead.text;
     document.getElementById("headline-more").innerHTML = rest.slice(0, 3).map(i => "<li>" + esc(i.text) + "</li>").join("");
+  }
+
+  // ---------- 3D map ----------
+  const MAPLIBRE = "https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl";
+  const MAP_STYLE = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+  const MAP_COLORS = { classic: "#3987e5", ebike: "#d95926" };  // dark-mode steps of the fleet colours
+  const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function loadMapLib() {
+    if (window.maplibregl) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = MAPLIBRE + ".css";
+      document.head.appendChild(css);
+      const js = document.createElement("script");
+      js.src = MAPLIBRE + ".js";
+      js.onload = resolve;
+      js.onerror = () => reject(new Error("map library failed to load"));
+      document.head.appendChild(js);
+    });
+  }
+
+  // Small geometry helpers, in degrees with a local metre scale.
+  const M_LAT = 1 / 111320;
+  const mLng = lat => 1 / (111320 * Math.cos(lat * Math.PI / 180));
+  function hexagon(lng, lat, r) {
+    const pts = [];
+    for (let i = 0; i <= 6; i++) {
+      const a = Math.PI / 3 * i + Math.PI / 6;
+      pts.push([lng + Math.cos(a) * r * mLng(lat), lat + Math.sin(a) * r * M_LAT]);
+    }
+    return [pts];
+  }
+  function arcPath(a, b, n = 28) {
+    // Quadratic curve bowed to one side so opposite directions don't overlap.
+    const kx = 1 / mLng(a[1]), ky = 1 / M_LAT;               // degrees -> metres
+    const dx = (b[0] - a[0]) * kx, dy = (b[1] - a[1]) * ky;
+    const c = [a[0] + dx / 2 / kx - dy * 0.18 / kx, a[1] + dy / 2 / ky + dx * 0.18 / ky];
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, u = 1 - t;
+      pts.push([u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1]]);
+    }
+    return pts;
+  }
+  function loopPath(a, r = 260, n = 40) {
+    // Round trip: a circle that leaves the station and comes back to it.
+    const cx = a[0] + r * 0.7 * mLng(a[1]), cy = a[1] + r * 0.7 * M_LAT;
+    const start = Math.atan2(a[1] - cy, (a[0] - cx) * (M_LAT / mLng(a[1])));
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const ang = start + 2 * Math.PI * i / n;
+      pts.push([cx + Math.cos(ang) * r * mLng(a[1]), cy + Math.sin(ang) * r * M_LAT]);
+    }
+    return pts;
+  }
+  function along(path, u) {
+    const x = Math.max(0, Math.min(1, u)) * (path.length - 1), i = Math.min(path.length - 2, Math.floor(x)), f = x - i;
+    return [path[i][0] + (path[i + 1][0] - path[i][0]) * f, path[i][1] + (path[i + 1][1] - path[i][1]) * f];
+  }
+  const clockLabel = h => { const H = Math.floor(h) % 24; return (H % 12 || 12) + " " + (H < 12 ? "AM" : "PM"); };
+  const fc = features => ({ type: "FeatureCollection", features });
+
+  async function renderMap(p, period) {
+    const geo = p.geo;
+    const section = document.getElementById("map");
+    if (!geo || !geo.stations || !geo.stations.length) return;   // map layers not published yet (sql/08)
+    section.hidden = false;
+    document.getElementById("map-title").textContent = "A day of Bay Wheels · " + period.label;
+    try {
+      await loadMapLib();
+      const probe = document.createElement("canvas");
+      if (!(probe.getContext("webgl2") || probe.getContext("webgl"))) throw new Error("WebGL is turned off in this browser");
+    } catch (e) {
+      const stage = section.querySelector(".map-stage");
+      stage.style.height = "auto";
+      stage.innerHTML = '<p class="map-note">The 3D map couldn’t load here (' + esc(e.message) + '). Everything below still works.</p>';
+      return;
+    }
+
+    const stations = geo.stations;
+    const byId = Object.fromEntries(stations.map(s => [s.id, s]));
+    const days = period.days;
+    const hourTotals = Array.from({ length: 24 }, (_, h) => sum(stations, s => s.hours[h]));
+    const maxHourly = Math.max(1, ...stations.map(s => Math.max(...s.hours)));
+
+    // Flows with geometry and per-hour spawn weights (origin's hourly profile x flow volume).
+    const flows = (geo.flows || []).map(f => {
+      const o = byId[f.o], d = byId[f.d];
+      const a = [o.lng, o.lat], b = [d.lng, d.lat];
+      const loop = f.o === f.d;
+      const oTotal = sum(o.hours, v => v) || 1;
+      return { ...f, loop, path: loop ? loopPath(a) : arcPath(a, b), w: o.hours.map(v => f.trips * v / oTotal),
+               dur: Math.max(1.6, Math.min(5, (f.min || 12) / 6)), eShare: f.trips ? f.ebike / f.trips : 0 };
+    }).filter(f => f.path.every(pt => isFinite(pt[0]) && isFinite(pt[1])));
+    const flowWeightByHour = Array.from({ length: 24 }, (_, h) => sum(flows, f => f.w[h]));
+    const maxFlowWeight = Math.max(1, ...flowWeightByHour);
+    const maxFlowTrips = Math.max(1, ...flows.map(f => f.trips));
+
+    // Camera: centre on where rides actually happen (departure-weighted), not the bounding box of the whole system.
+    const busiest = [...stations].sort((a, b) => b.dep - a.dep);
+    const core = busiest.slice(0, Math.max(10, Math.round(stations.length * 0.3)));
+    const cw = sum(core, s => s.dep) || 1;
+    const center = [sum(core, s => s.lng * s.dep) / cw, sum(core, s => s.lat * s.dep) / cw];
+    const topLoop = flows.filter(f => f.loop).sort((a, b) => b.rev - a.rev)[0];
+    const peakHour = hourTotals.indexOf(Math.max(...hourTotals));
+
+    const map = new maplibregl.Map({
+      container: "map-canvas", style: MAP_STYLE, center, zoom: 12.3, pitch: 55, bearing: -20,
+      antialias: true, attributionControl: { compact: true }, cooperativeGestures: matchMedia("(pointer: coarse)").matches
+    });
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "bottom-right");
+
+    let hour = REDUCED_MOTION ? peakHour : 6;       // start the day at 6am
+    let playing = !REDUCED_MOTION, userMoved = false, bikes = [], spawnAcc = 0, lastStationHour = -1, last = performance.now(), lastPaint = 0;
+    const HOUR_SECONDS = 4;                          // one simulated hour every 4 seconds
+
+    const stationFeatures = v => fc(stations.map((s, i) => ({
+      type: "Feature", id: i,
+      properties: { i, v: v(s), n: s.name },
+      geometry: { type: "Polygon", coordinates: hexagon(s.lng, s.lat, 45) }
+    })));
+    const heightAt = (s, h) => { const a = Math.floor(h) % 24, b = (a + 1) % 24, f = h - Math.floor(h); return s.hours[a] * (1 - f) + s.hours[b] * f; };
+
+    map.on("load", () => {
+      const firstSymbol = (map.getStyle().layers.find(l => l.type === "symbol") || {}).id;
+      // 3D buildings from the basemap's vector tiles, when the style provides them.
+      try {
+        const src = Object.keys(map.getStyle().sources).find(k => map.getStyle().sources[k].type === "vector");
+        if (src) map.addLayer({ id: "buildings-3d", type: "fill-extrusion", source: src, "source-layer": "building", minzoom: 13.5,
+          paint: { "fill-extrusion-color": "#262625", "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
+                   "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0], "fill-extrusion-opacity": 0.75 } }, firstSymbol);
+      } catch (e) { /* basemap without buildings: skip */ }
+
+      map.addSource("flows", { type: "geojson", data: fc(flows.map(f => ({ type: "Feature", properties: { t: f.trips / maxFlowTrips, e: f.eShare > 0.5 ? 1 : 0 },
+        geometry: { type: "LineString", coordinates: f.path } }))) });
+      map.addLayer({ id: "flows", type: "line", source: "flows", layout: { "line-cap": "round" },
+        paint: { "line-color": ["case", ["==", ["get", "e"], 1], MAP_COLORS.ebike, MAP_COLORS.classic],
+                 "line-opacity": ["interpolate", ["linear"], ["get", "t"], 0, 0.06, 1, 0.28],
+                 "line-width": ["interpolate", ["linear"], ["get", "t"], 0, 0.6, 1, 3] } });
+
+      map.addSource("stations", { type: "geojson", data: stationFeatures(s => heightAt(s, hour)) });
+      map.addLayer({ id: "stations", type: "fill-extrusion", source: "stations",
+        paint: { "fill-extrusion-height": ["*", ["get", "v"], 900 / maxHourly],
+                 "fill-extrusion-color": ["interpolate", ["linear"], ["/", ["get", "v"], maxHourly], 0, "#3a3936", 0.25, "#8a877f", 1, "#f5f4f0"],
+                 "fill-extrusion-opacity": 0.9 } });
+
+      map.addSource("trails", { type: "geojson", data: fc([]) });
+      map.addLayer({ id: "trails", type: "line", source: "trails", layout: { "line-cap": "round" },
+        paint: { "line-color": ["case", ["==", ["get", "e"], 1], MAP_COLORS.ebike, MAP_COLORS.classic], "line-width": 2.2, "line-opacity": 0.55 } });
+      map.addSource("bikes", { type: "geojson", data: fc([]) });
+      map.addLayer({ id: "bikes-glow", type: "circle", source: "bikes",
+        paint: { "circle-radius": 7, "circle-blur": 1, "circle-opacity": 0.45, "circle-color": ["case", ["==", ["get", "e"], 1], MAP_COLORS.ebike, MAP_COLORS.classic] } });
+      map.addLayer({ id: "bikes", type: "circle", source: "bikes",
+        paint: { "circle-radius": 2.6, "circle-color": ["case", ["==", ["get", "e"], 1], "#ffb08a", "#9cc4f5"] } });
+
+      // Station card with a Street View link (the closest thing to a photo without an API key).
+      map.on("mouseenter", "stations", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "stations", () => { map.getCanvas().style.cursor = ""; });
+      map.on("click", "stations", e => {
+        const s = stations[e.features[0].properties.i];
+        const sv = "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=" + s.lat + "," + s.lng;
+        const html = '<div class="pop"><h3>' + esc(s.name) + '</h3><div class="g">' +
+          "<span>Rides started</span><span>" + int(s.dep) + "</span><span>Rides ended</span><span>" + int(s.arr) + "</span>" +
+          "<span>Est. fare revenue</span><span>" + usd(s.rev, 0) + "</span><span>E-bike share</span><span>" + pct(s.ebike) + "</span>" +
+          "<span>Casual share</span><span>" + pct(s.casual) + "</span><span>Busiest hour</span><span>" + clockLabel(s.hours.indexOf(Math.max(...s.hours))) + "</span>" +
+          "</div>" + (s.top_route ? '<p style="margin:8px 0 0">Top route: ' + esc(routeName(s.top_route)) + "</p>" : "") +
+          '<div class="acts"><a href="' + esc(sv) + '" target="_blank" rel="noopener">Street View ↗</a><button data-fly="' + e.features[0].properties.i + '">Zoom in 3D</button></div></div>';
+        new maplibregl.Popup({ maxWidth: "280px" }).setLngLat([s.lng, s.lat]).setHTML(html).addTo(map);
+      });
+      document.getElementById("map-canvas").addEventListener("click", e => {
+        const b = e.target.closest("[data-fly]");
+        if (b) { const s = stations[+b.dataset.fly]; userMoved = true; map.flyTo({ center: [s.lng, s.lat], zoom: 16.4, pitch: 65, bearing: map.getBearing() + 30, duration: 2500 }); }
+      });
+
+      requestAnimationFrame(tick);
+    });
+    ["mousedown", "touchstart", "wheel"].forEach(ev => map.getCanvas().addEventListener(ev, () => { userMoved = true; }, { passive: true }));
+
+    // Controls
+    const playBtn = document.getElementById("map-play"), slider = document.getElementById("map-hour");
+    const setPlaying = on => { playing = on; playBtn.textContent = on ? "❚❚ Pause" : "▶ Play"; playBtn.setAttribute("aria-label", on ? "Pause the day" : "Play the day"); };
+    setPlaying(playing);
+    playBtn.onclick = () => setPlaying(!playing);
+    slider.oninput = () => { hour = +slider.value; setPlaying(false); };
+    const views = [
+      { label: "City", go: () => map.flyTo({ center, zoom: 12.3, pitch: 55, bearing: -20, duration: 2000 }) },
+      topLoop && { label: "Top loop", go: () => { const s = byId[topLoop.o]; map.flyTo({ center: [s.lng, s.lat], zoom: 14.6, pitch: 62, bearing: 30, duration: 2500 }); } },
+      { label: "Busiest station", go: () => { const s = busiest[0]; map.flyTo({ center: [s.lng, s.lat], zoom: 15.6, pitch: 64, bearing: -40, duration: 2500 }); } },
+      { label: "Whole network", go: () => { const b = new maplibregl.LngLatBounds(); stations.forEach(s => b.extend([s.lng, s.lat])); map.fitBounds(b, { padding: 40, pitch: 40, duration: 2000 }); } },
+      { label: "2D / 3D", go: () => map.easeTo({ pitch: map.getPitch() > 5 ? 0 : 55, duration: 1000 }) }
+    ].filter(Boolean);
+    const viewsEl = document.getElementById("map-views");
+    viewsEl.innerHTML = views.map((v, i) => '<button data-view="' + i + '">' + esc(v.label) + "</button>").join("");
+    viewsEl.onclick = e => { const b = e.target.closest("[data-view]"); if (b) { userMoved = true; views[+b.dataset.view].go(); } };
+    document.getElementById("map-legend").innerHTML =
+      '<span><i class="dot" style="background:' + MAP_COLORS.classic + '"></i>Classic bike</span>' +
+      '<span><i class="dot" style="background:' + MAP_COLORS.ebike + '"></i>E-bike</span>' +
+      "<span>Column height = rides starting there this hour</span><span>Circles = round trips</span>";
+
+    // Caption: the story the map tells.
+    const rt = geo.round_trips;
+    const cap = [];
+    if (rt && rt.trips && rt.casual_revenue) {
+      cap.push("<b>Round trips are " + pct(rt.round_trips / rt.trips) + " of rides but " + pct(rt.round_trip_casual_revenue / rt.casual_revenue) +
+        " of casual fare revenue.</b> These are leisure rides that end where they began, priced by the minute." +
+        (topLoop ? " The biggest earner is the loop from " + esc(byId[topLoop.o].name) + " (" + usd(topLoop.rev, 0) + ")." : ""));
+    }
+    cap.push('<span style="color:#989690">Bikes are drawn along the ' + flows.length + " busiest routes, in proportion to real August trips at each hour. Click a station for its numbers and Street View.</span>");
+    document.getElementById("map-caption").innerHTML = cap.join("");
+
+    function spawn(h) {
+      const weights = flows.map(f => f.w[h]);
+      let r = Math.random() * sum(weights, w => w);
+      for (let i = 0; i < flows.length; i++) { r -= weights[i]; if (r <= 0) return flows[i]; }
+      return flows[flows.length - 1];
+    }
+
+    let visible = true;
+    new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(section);
+
+    function tick(now) {
+      requestAnimationFrame(tick);
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      if (!visible || document.hidden) return;
+      if (playing) hour = (hour + dt / HOUR_SECONDS) % 24;
+      const H = Math.floor(hour);
+
+      if (!REDUCED_MOTION && flows.length) {
+        spawnAcc += 70 * (flowWeightByHour[H] / maxFlowWeight) * dt;
+        while (spawnAcc >= 1 && bikes.length < 450) {
+          spawnAcc -= 1;
+          const f = spawn(H);
+          bikes.push({ f, t0: now, dur: f.dur * (0.8 + Math.random() * 0.4) * 1000, e: Math.random() < f.eShare ? 1 : 0 });
+        }
+        if (spawnAcc >= 1) spawnAcc = 0;
+        bikes = bikes.filter(b => now - b.t0 < b.dur);
+      }
+      if (now - lastPaint < 33) return;               // ~30 fps is plenty
+      lastPaint = now;
+
+      if (!REDUCED_MOTION) {
+        const heads = [], trails = [];
+        bikes.forEach(b => {
+          const u = (now - b.t0) / b.dur;
+          heads.push({ type: "Feature", properties: { e: b.e }, geometry: { type: "Point", coordinates: along(b.f.path, u) } });
+          const tail = [];
+          for (let k = 5; k >= 0; k--) tail.push(along(b.f.path, u - k * 0.025));
+          trails.push({ type: "Feature", properties: { e: b.e }, geometry: { type: "LineString", coordinates: tail } });
+        });
+        const src = map.getSource("bikes");
+        if (src) { src.setData(fc(heads)); map.getSource("trails").setData(fc(trails)); }
+      }
+      // Station columns follow the clock, smoothly between hours (repainted ~8x a second).
+      const hStep = Math.round(hour * 8) / 8;
+      if (hStep !== lastStationHour && map.getSource("stations")) {
+        lastStationHour = hStep;
+        map.getSource("stations").setData(stationFeatures(s => heightAt(s, hour)));
+      }
+      if (playing && !userMoved && !REDUCED_MOTION) map.setBearing(map.getBearing() + dt * 1.5);
+      document.getElementById("map-clock").textContent = clockLabel(hour);
+      document.getElementById("map-hour-trips").textContent = "≈ " + int(hourTotals[H] / days) + " rides start this hour on an average day";
+      if (+slider.value !== H) slider.value = H;
+    }
   }
 
   // ---------- load ----------
@@ -694,16 +1026,17 @@
 
       const fleet = p.fleet || [], riders = p.riders || [];
       renderKpis(p, stations, fleet, riders);
-      const insights = [renderFleet(fleet), renderRiders(riders), renderRoutes(p.routes || [])].flat();
+      const insights = [renderFleet(fleet), renderRiders(riders), renderRoutes(p.routes || []), roundTripInsight(p.geo)].flat();
       renderHours(p.hours || []);
       renderPeaks(p.peak_routes || []);
-      renderPromo(stations);
+      renderPromo(p.promo && p.promo.length ? p.promo : stations);
       renderStations(stations, period.days);
       renderHeadline(insights, stations);
 
       status.hidden = true;
       document.getElementById("app").hidden = false;
       document.getElementById("admin").hidden = !ACTIONS_ENABLED;
+      renderMap(p, period).catch(e => console.error("map:", e));
     } catch (err) {
       status.hidden = false;
       status.classList.add("error");
