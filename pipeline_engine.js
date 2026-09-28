@@ -9,9 +9,11 @@ const CONFIG = {
   viewName: "v_inventory_summary",
   usageView: "v_inventory_usage",
   cloudflare: {
-    accountId: process.env.CF_ACCOUNT_ID,
-    namespaceId: process.env.CF_KV_NAMESPACE_ID,
-    apiToken: process.env.CF_API_TOKEN,
+    // KV_* names keep Wrangler from picking this KV-only token up as its deploy login.
+    // The old CF_* names still work so existing .env files don't break.
+    accountId: process.env.KV_ACCOUNT_ID || process.env.CF_ACCOUNT_ID,
+    namespaceId: process.env.KV_NAMESPACE_ID || process.env.CF_KV_NAMESPACE_ID,
+    apiToken: process.env.KV_API_TOKEN || process.env.CF_API_TOKEN,
     kvKey: "inventory_dashboard_data"
   },
   // Label and length of the period the BigQuery views cover (used for per-day rates on the dashboard).
@@ -199,6 +201,9 @@ async function pushKv(rows, source, extra) {
     data: rows
   };
   const { accountId, namespaceId, apiToken, kvKey } = CONFIG.cloudflare;
+  if (!accountId || !namespaceId || !apiToken) {
+    throw new Error("Missing KV_ACCOUNT_ID, KV_NAMESPACE_ID or KV_API_TOKEN in .env");
+  }
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${kvKey}`;
   const response = await fetch(endpoint, {
     method: "PUT",
