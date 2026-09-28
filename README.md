@@ -40,7 +40,16 @@ BigQuery views  ──►  pipeline_engine.js (Node)  ──►  Cloudflare KV  
 
 ## Revenue methodology
 
-Revenue figures are **estimated trip fares**, based on the published Jan 2026 Bay Wheels tariff. They are not Lyft settlement data and exclude membership dues, tax and parking fees. That means members look cheaper per trip than they really are, because their dues aren't counted.
+Revenue figures are **estimated trip fares**. Each August 2026 Bay Wheels trip is priced using the published Jan 2026 tariff (`sql/04_rideable_and_revenue.sql`):
+
+| Rider | Classic bike | E-bike |
+|---|---|---|
+| Casual | $1 unlock + $0.19/min | $1 unlock + $0.49/min |
+| Member | first 45 min free, then $0.17/min | $0.17/min |
+
+- Trip duration is clamped to 1–180 minutes, so a broken clock can't produce a $500 ride.
+- These are not Lyft settlement figures. They exclude membership dues, tax and parking fees, so members look cheaper per trip than they really are.
+- **"Paid above member rates"** (`conversion_gap`) re-prices every casual trip at member rates and adds up the difference. It measures the saving a membership would have given those riders, which makes it the size of the membership pitch.
 
 ## Running it
 
@@ -65,9 +74,23 @@ Environment variables for the pipeline (`.env`):
 
 The deployed dashboard is **read-only**. Capacity overrides and alert logging are only available when you set `ENABLE_ACTIONS = "true"` in `wrangler.toml` **and** add a secret with `wrangler secret put ADMIN_TOKEN`. Every write needs that token, and inputs are validated. Actions are logged to BigQuery when a `GCP_ACCESS_TOKEN` secret is set.
 
-## BigQuery views (`sql/`)
+## BigQuery setup (`sql/`)
 
-The pipeline expects these views in `dashboard_db`:
+Run these in order in the BigQuery console (project `beaming-might-319312`, dataset `dashboard_db`):
+
+| Step | File | What it does |
+|---|---|---|
+| 1 | `01_check_and_fix_inventory.sql` | Freezes the station list into `station_inventory` and builds a first `v_inventory_usage` from the public 2013–2016 trips |
+| 2 | `02_recover_more_stations.sql` | Matches more docks against both public trip tables (by ID, exact name, then fuzzy name) |
+| 3 | `06_load_from_gcs.md` | Loads the August 2026 Bay Wheels trip CSV into `baywheels_trips_recent` through Cloud Storage (the file is too big to upload directly) |
+| 4 | `03_load_baywheels_month.sql` | Rebuilds station usage from the August 2026 trips |
+| 5 | `04_rideable_and_revenue.sql` | Prices every trip (`trip_fares`) and creates `v_fleet_revenue`, `v_route_revenue` and the revenue-aware `v_inventory_usage` |
+| 6 | `05_rider_and_peaks.sql` | Adds time windows and member-rate re-pricing, then creates `v_rider_revenue`, `v_hour_mix`, `v_peak_routes` and `v_promo_targets` |
+| 7 | `07_check_fare_desk.sql` | Sanity check that the rider, hour and peak views are populated |
+
+Then run the pipeline. Time windows are weekday 7–10am, 10am–4pm and 4–7pm, weekday off-peak, and weekend.
+
+The pipeline reads these columns:
 
 | View | Columns used |
 |---|---|
@@ -75,8 +98,6 @@ The pipeline expects these views in `dashboard_db`:
 | `v_fleet_revenue` | `bike_type, trips, est_revenue, fare_per_trip, avg_min` |
 | `v_route_revenue` | `route, bike_type, trips, est_revenue, avg_min` |
 | `v_rider_revenue` | `rider, trips, est_revenue, fare_per_trip, avg_min, ebike_share, conversion_gap` |
-| `v_hour_mix` | `hour, time_window, rider, trips, est_revenue` |
-| `v_peak_routes` | `time_window, rider, route, trips, est_revenue, avg_min, ebike_share` |
+| `v_hour_mix` | `hour, window, rider, trips, est_revenue` |
+| `v_peak_routes` | `window, rider, route, trips, est_revenue, avg_min, ebike_share` |
 | `v_promo_targets` | `station_id, casual_share, conversion_gap, peak_casual_share, casual_trips, member_trips` |
-
-The SQL that creates these views belongs in `sql/`.

@@ -300,6 +300,9 @@
   const riderKey = t => /member|subscriber/i.test(t) ? "member" : /casual|customer/i.test(t) ? "casual" : String(t || "other").toLowerCase();
   const LABEL = { ebike: "E-bike", classic: "Classic", member: "Member", casual: "Casual" };
   const COLOR = { ebike: "var(--ebike)", classic: "var(--classic)", member: "var(--member)", casual: "var(--casual)" };
+  const WINDOWS = { am_peak: "Weekday 7–10am", midday: "Weekday 10am–4pm", pm_peak: "Weekday 4–7pm", off_peak: "Weekday off-peak", weekend: "Weekend" };
+  const windowLabel = w => WINDOWS[w] || String(w || "");
+  const windowOrder = w => { const i = Object.keys(WINDOWS).indexOf(w); return i < 0 ? 99 : i; };
   const label = k => LABEL[k] || k.replace(/(^|[_\s])(\w)/g, (m, a, b) => (a ? " " : "") + b.toUpperCase());
   const color = k => COLOR[k] || "var(--muted)";
 
@@ -429,15 +432,22 @@
         usd(cas.fare) + " per trip vs " + usd(mem.fare) + " for members (membership dues excluded).";
       insight = { text: takeaway, weight: Math.abs(rs - ts) * 0.9 };
     }
+    const overpay = cas ? cas.gap : 0;
+    const factList = groups.map(g => ({ key: g.key, k: label(g.key) + " fare per trip", v: usd(g.fare) }));
+    if (overpay > 0) factList.push({ k: "Casual riders paid above member rates", v: usd(overpay, 0) });
     section("riders", takeaway,
       splitBars(groups, "casual") +
-      facts(groups.map(g => ({ key: g.key, k: label(g.key) + " fare per trip", v: usd(g.fare) }))) +
+      facts(factList) +
       tableView([
         { h: "Rider", f: r => label(r.key) }, { h: "Trips", r: 1, f: r => int(r.trips) },
         { h: "Est. revenue", r: 1, f: r => usd(r.revenue, 0) }, { h: "Fare / trip", r: 1, f: r => usd(r.fare) },
         { h: "Avg minutes", r: 1, f: r => n(r.avg).toFixed(1) }, { h: "E-bike share", r: 1, f: r => pct(r.ebike) },
-        { h: "Conversion gap", r: 1, f: r => n(r.gap).toFixed(2) }
+        { h: "Paid above member rates", r: 1, f: r => usd(r.gap, 0) }
       ], groups));
+    if (overpay > 0 && cas.trips) {
+      return [insight, { text: "Casual riders paid " + usd(overpay, 0) + " more than members would have for the same " + int(cas.trips) +
+        " rides (" + usd(overpay / cas.trips) + " a ride, before dues). That is the saving a membership pitch can put in front of them.", weight: 0.05 }];
+    }
     return insight;
   }
 
@@ -531,36 +541,39 @@
 
   function renderPeaks(peaks) {
     if (!peaks.length) return missing("peaks", "peak-corridor data");
-    const windows = [...new Set(peaks.map(p => p.window).filter(Boolean))];
+    const windows = [...new Set(peaks.map(p => p.window).filter(Boolean))].sort((a, b) => windowOrder(a) - windowOrder(b));
     let active = "All";
     const controls = document.querySelector("#peaks [data-controls]");
     const draw = () => {
       const list = peaks.filter(p => active === "All" || p.window === active).sort((a, b) => n(b.est_revenue) - n(a.est_revenue)).slice(0, 10);
       const body = '<div class="scroll"><table><thead><tr><th>Window</th><th>Rider</th><th>Route</th><th class="r">Trips</th><th class="r">Est. revenue</th><th class="r">Avg min</th><th class="r">E-bike share</th></tr></thead><tbody>' +
-        list.map(p => "<tr><td>" + esc(p.window) + '</td><td><i class="sw" style="background:' + color(riderKey(p.rider)) + '"></i> ' + esc(label(riderKey(p.rider))) + "</td><td>" + esc(p.route) +
+        list.map(p => "<tr><td>" + esc(windowLabel(p.window)) + '</td><td><i class="sw" style="background:' + color(riderKey(p.rider)) + '"></i> ' + esc(label(riderKey(p.rider))) + "</td><td>" + esc(p.route) +
           '</td><td class="r">' + int(p.trips) + '</td><td class="r">' + usd(p.est_revenue, 0) + '</td><td class="r">' + n(p.avg_min).toFixed(1) + '</td><td class="r">' + pct(p.ebike_share) + "</td></tr>").join("") +
         "</tbody></table></div>";
       const top = list[0];
-      section("peaks", top ? "In " + (active === "All" ? "all windows" : active) + ", the highest-earning corridor is " + top.route + " (" + label(riderKey(top.rider)).toLowerCase() + " riders, " + usd(top.est_revenue, 0) + "). Make sure bikes are docked at its start station before this window begins." : "", body);
+      section("peaks", top ? "In " + (active === "All" ? "all windows" : windowLabel(active)) + ", the highest-earning corridor is " + top.route + " (" + label(riderKey(top.rider)).toLowerCase() + " riders, " + usd(top.est_revenue, 0) + "). Make sure bikes are docked at its start station before this window begins." : "", body);
       controls.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.w === active)));
     };
-    controls.innerHTML = ["All"].concat(windows).map(w => '<button class="chip" data-w="' + esc(w) + '">' + esc(w) + "</button>").join("");
+    controls.innerHTML = ["All"].concat(windows).map(w => '<button class="chip" data-w="' + esc(w) + '">' + esc(w === "All" ? w : windowLabel(w)) + "</button>").join("");
     controls.onclick = e => { const b = e.target.closest(".chip"); if (b) { active = b.dataset.w; draw(); } };
     draw();
   }
 
   function renderPromo(stations) {
-    const list = stations.filter(s => n(s.casual_trips) > 0).sort((a, b) => n(b.casual_trips) - n(a.casual_trips)).slice(0, 10);
+    const byGap = stations.some(s => n(s.conversion_gap) > 0);
+    const key = s => byGap ? n(s.conversion_gap) : n(s.casual_trips);
+    const list = stations.filter(s => n(s.casual_trips) > 0).sort((a, b) => key(b) - key(a)).slice(0, 10);
     if (!list.length) return missing("promo", "membership-target (v_promo_targets) data");
-    const totCas = sum(stations, s => s.casual_trips);
-    const topCas = sum(list, s => s.casual_trips);
-    const takeaway = "These " + list.length + " stations carry " + pct(totCas ? topCas / totCas : 0) +
-      " of all casual trips. They are the cheapest place to reach riders who already use the service but don't yet pay a membership.";
+    const share = sum(stations, key) ? sum(list, key) / sum(stations, key) : 0;
+    const takeaway = byGap
+      ? "Casual riders starting at these " + list.length + " stations paid " + usd(sum(list, key), 0) + " above member rates, " + pct(share) +
+        " of the system-wide total. That's where a \"you'd have saved $X with a membership\" message reaches the most people."
+      : "These " + list.length + " stations carry " + pct(share) + " of all casual trips, the cheapest place to reach riders who don't yet have a membership.";
     section("promo", takeaway,
-      '<div class="scroll"><table><thead><tr><th>#</th><th>Station</th><th class="r">Casual trips</th><th class="r">Casual share</th><th class="r">Peak-hour casual share</th><th class="r">Conversion gap</th></tr></thead><tbody>' +
+      '<div class="scroll"><table><thead><tr><th>#</th><th>Station</th><th class="r">Casual trips</th><th class="r">Casual share</th><th class="r">Casual share at peak</th><th class="r">Paid above member rates</th></tr></thead><tbody>' +
       list.map((s, i) => '<tr><td class="muted">' + (i + 1) + "</td><td>" + esc(s.station_name) + '</td><td class="r">' + int(s.casual_trips) + '</td><td class="r">' + pct(s.casual_share) +
-        '</td><td class="r">' + pct(s.peak_casual_share) + '</td><td class="r">' + n(s.conversion_gap).toFixed(2) + "</td></tr>").join("") +
-      '</tbody></table></div><p class="small muted" style="margin-top:8px">Conversion gap comes directly from <code>v_promo_targets</code>.</p>');
+        '</td><td class="r">' + pct(s.peak_casual_share) + '</td><td class="r">' + usd(s.conversion_gap, 0) + "</td></tr>").join("") +
+      '</tbody></table></div><p class="small muted" style="margin-top:8px">Paid above member rates: what casual riders paid for trips starting here, minus what the same trips cost at member rates (before membership dues). Peak = weekday 7–10am and 4–7pm.</p>');
   }
 
   let stationState = { sort: "revenue_per_dock", dir: -1, q: "", all: false };
@@ -681,7 +694,7 @@
 
       const fleet = p.fleet || [], riders = p.riders || [];
       renderKpis(p, stations, fleet, riders);
-      const insights = [renderFleet(fleet), renderRiders(riders), renderRoutes(p.routes || [])];
+      const insights = [renderFleet(fleet), renderRiders(riders), renderRoutes(p.routes || [])].flat();
       renderHours(p.hours || []);
       renderPeaks(p.peak_routes || []);
       renderPromo(stations);
