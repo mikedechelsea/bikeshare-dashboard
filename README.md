@@ -67,7 +67,7 @@ Environment variables for the pipeline (`.env`):
 |---|---|
 | `PROJECT_ID` | GCP project with the `dashboard_db` dataset |
 | `GOOGLE_APPLICATION_CREDENTIALS` | path to a service-account key (never commit it) |
-| `CF_ACCOUNT_ID`, `CF_KV_NAMESPACE_ID`, `CF_API_TOKEN` | Cloudflare KV write access |
+| `KV_ACCOUNT_ID`, `KV_NAMESPACE_ID`, `KV_API_TOKEN` | Cloudflare KV write access for the pipeline. Don't use the `CF_*` or `CLOUDFLARE_*` names: Wrangler would treat this KV-only token as its deploy login, and `npm run deploy` would fail with "No access to the specified service". |
 | `PERIOD_LABEL`, `PERIOD_DAYS` | optional: label and length of the data period (used for trips per dock per day) |
 
 ### Operator actions (off by default)
