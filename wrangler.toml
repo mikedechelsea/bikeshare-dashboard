@@ -1,0 +1,13 @@
+﻿name = "bikeshare-dashboard"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+PROJECT_ID = "beaming-might-319312"
+DATASET_ID = "dashboard_db"
+TABLE_ID = "user_actions"
+
+# Bind your Cloudflare KV Namespace
+[[kv_namespaces]]
+binding = "INVENTORY_KV"
+id = "2e4b78b76eba4767bbb0274f7c8b83bf"
