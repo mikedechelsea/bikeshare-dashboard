@@ -6,6 +6,9 @@ compatibility_date = "2024-01-01"
 PROJECT_ID = "beaming-might-319312"
 DATASET_ID = "dashboard_db"
 TABLE_ID = "user_actions"
+# Operator actions (capacity overrides, alerts) stay off for public links.
+# To enable: set ENABLE_ACTIONS = "true" and `wrangler secret put ADMIN_TOKEN`.
+ENABLE_ACTIONS = "false"
 
 # Bind your Cloudflare KV Namespace
 [[kv_namespaces]]
