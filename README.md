@@ -71,6 +71,12 @@ Environment variables for the pipeline (`.env`):
 | `KV_ACCOUNT_ID`, `KV_NAMESPACE_ID`, `KV_API_TOKEN` | Cloudflare KV write access for the pipeline. Don't use the `CF_*` or `CLOUDFLARE_*` names: Wrangler would treat this KV-only token as its deploy login, and `npm run deploy` would fail with "No access to the specified service". |
 | `PERIOD_LABEL`, `PERIOD_DAYS` | optional: label and length of the data period (used for trips per dock per day) |
 
+### Making the LinkedIn video
+
+`npm run video` records a ~45-second portrait video (1080×1350 MP4) of the live dashboard: a title card, the 3D map playing through the day, the key finding and score cards, fleet and rider splits, the hourly chart and membership targets, then an end card with the link. Captions are built from the live data.
+
+It drives the Microsoft Edge that ships with Windows, so no browser download is needed, and encodes with a bundled ffmpeg. Options: `--browser chrome`, `--url <deployment>`, `--out <file.mp4>`, `--headed` (watch it record).
+
 ### Operator actions (off by default)
 
 The deployed dashboard is **read-only**. Capacity overrides and alert logging are only available when you set `ENABLE_ACTIONS = "true"` in `wrangler.toml` **and** add a secret with `wrangler secret put ADMIN_TOKEN`. Every write needs that token, and inputs are validated. Actions are logged to BigQuery when a `GCP_ACCESS_TOKEN` secret is set.
